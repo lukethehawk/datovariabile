@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DatoVariabile</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23d9480f'/><text x='16' y='22' font-size='15' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>DV</text></svg>" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="brand">Dato<span>Variabile</span></div>
+      <label class="btn" title="PDF da usare come velina (sfondo ripetuto)">📄 Velina PDF<input id="in-template" type="file" accept=".pdf" hidden /></label>
+      <label class="btn" title="Excel, CSV o TXT con i dati variabili">📊 Dati<input id="in-data" type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.txt" hidden /></label>
+      <span class="sep"></span>
+      <label class="btn" title="Apri un progetto salvato (.dvp.json)">📂 Apri progetto<input id="in-project" type="file" accept=".json" hidden /></label>
+      <button id="btn-save" class="btn" type="button" title="Salva zone, velina e font in un file .dvp.json">💾 Salva progetto</button>
+      <span id="template-name" class="muted"></span>
+      <span class="spacer"></span>
+      <button id="btn-generate" class="btn primary" type="button">Crea PDF</button>
+    </header>
+
+    <main>
+      <aside class="left">
+        <section>
+          <h2>Zone</h2>
+          <div class="add">
+            <button id="add-text" class="btn" type="button">＋ Testo</button>
+            <button id="add-barcode" class="btn" type="button">＋ Codice / QR</button>
+          </div>
+          <ul id="field-list" class="field-list"></ul>
+        </section>
+        <section id="props" class="props"></section>
+      </aside>
+
+      <section class="stage">
+        <div class="stage-bar">
+          <select id="page-select" title="Pagina della velina"></select>
+          <span class="spacer"></span>
+          <span class="muted">Anteprima record</span>
+          <button id="record-prev" class="btn icon" type="button" title="Record precedente">◀</button>
+          <input id="record-input" type="number" min="1" value="1" />
+          <span id="record-total" class="muted"></span>
+          <button id="record-next" class="btn icon" type="button" title="Record successivo">▶</button>
+          <span class="spacer"></span>
+          <button id="zoom-out" class="btn icon" type="button" title="Riduci (Ctrl+rotellina)">−</button>
+          <button id="zoom-fit" class="btn" type="button" title="Adatta alla finestra"><span id="zoom-label">100%</span></button>
+          <button id="zoom-in" class="btn icon" type="button" title="Ingrandisci (Ctrl+rotellina)">＋</button>
+        </div>
+        <div id="viewport" class="viewport">
+          <div id="empty" class="empty">
+            <div>
+              <h1>Trascina qui la velina PDF</h1>
+              <p>poi il file dati (Excel, CSV o TXT), oppure un progetto salvato.</p>
+              <ol>
+                <li>Carica la <b>velina</b>: il PDF grafico da ripetere.</li>
+                <li>Carica i <b>dati</b> (facoltativo per i soli contatori).</li>
+                <li>Aggiungi le <b>zone</b> di testo o codice e posizionale.</li>
+                <li><b>Crea PDF</b>: la velina è inclusa una sola volta, il file resta leggero.</li>
+              </ol>
+            </div>
+          </div>
+          <div id="page" class="page" hidden>
+            <canvas id="bg"></canvas>
+            <canvas id="overlay"></canvas>
+            <div id="boxes"></div>
+          </div>
+          <div id="preview-error" class="preview-error" hidden></div>
+        </div>
+      </section>
+
+      <aside class="right">
+        <section>
+          <h2>Dati</h2>
+          <div id="data-panel"></div>
+        </section>
+        <section>
+          <h2>Crea PDF</h2>
+          <div id="output-panel"></div>
+        </section>
+      </aside>
+    </main>
+    <div id="toast" class="toast"></div>
+    <div class="drop-hint">Rilascia i file: PDF = velina · Excel/CSV/TXT = dati · TTF/OTF = font · .json = progetto</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

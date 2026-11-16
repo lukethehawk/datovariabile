@@ -1,0 +1,34 @@
+{
+  "name": "datovariabile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dato variabile su PDF: velina + Excel/CSV/TXT → PDF multipagina leggero",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lukethehawk/datovariabile.git"
+  },
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/lukethehawk/datovariabile/issues"
+  },
+  "homepage": "https://github.com/lukethehawk/datovariabile#readme",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "bwip-js": "^4.11.4",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438",
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
+  }
+}
