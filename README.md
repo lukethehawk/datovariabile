@@ -68,6 +68,8 @@ Struttura:
 
 SheetJS è incluso in `vendor/` perché la versione aggiornata non è pubblicata sul registro npm.
 
+Per chi sviluppa (anche agenti AI): [AGENTS.md](AGENTS.md) contiene la memoria di progetto (architettura, invarianti, convenzioni), [DIARIO_SVILUPPO.md](DIARIO_SVILUPPO.md) la cronologia delle decisioni.
+
 ## Limiti attuali
 
 - Nessun modulo di imposizione (più pose per foglio): il PDF ha un record per pagina.
