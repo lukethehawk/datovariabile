@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseProject, serializeProject } from '../src/core/project';
+import { parseProject } from '../src/core/project';
 import { makePdf, textField } from './helpers';
 
 const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
@@ -45,17 +45,21 @@ describe('project files', () => {
     expect(warnings[0]).toContain('uso tutte le pagine');
   });
 
-  it('round-trips version 2 and refuses unknown files', async () => {
+  it('reads version 2 files (no data) and refuses unknown files', async () => {
     const pdf = await makePdf([{ kb: 1 }]);
-    const data = {
-      sources: [{ id: 'x', name: 'a.pdf', kind: 'pdf' as const, bytes: pdf }],
-      slots: [{ id: 's1', sourceId: 'x', page: 0, enabled: true }],
+    const slots = [{ id: 's1', sourceId: 'x', page: 0, enabled: true }];
+    const v2 = { app: 'DatoVariabile', version: 2, sources: [{ id: 'x', name: 'a.pdf', kind: 'pdf', data: b64(pdf) }], slots, fields: [textField()], fonts: [], manualCount: 3 };
+    const { project, legacy } = await parseProject(JSON.stringify(v2));
+    expect(legacy).toBe(true);
+    expect(project).toEqual({
+      sources: [{ id: 'x', name: 'a.pdf', kind: 'pdf', bytes: pdf }],
+      slots,
       fields: [textField()],
       fonts: [],
       manualCount: 3,
-    };
-    const { project } = await parseProject(serializeProject(data));
-    expect(project).toEqual(data);
+      data: null,
+      range: { from: '', to: '' },
+    });
     await expect(parseProject('{"app":"DatoVariabile","version":9}')).rejects.toThrow('formato più recente');
     await expect(parseProject('{"app":"Altro"}')).rejects.toThrow('non è un progetto');
   });

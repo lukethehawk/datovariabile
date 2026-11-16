@@ -1,11 +1,25 @@
 /**
- * Project file (.dvp.json). Version 2 stores every source once (base64) plus the
- * composition (slots) and the fields bound to slots. Version 1 (single template
- * PDF + "pagesSpec") is migrated on open; data files are never saved.
+ * Project model shared by all formats, and readers of the legacy JSON files.
+ * Version 1 (single template PDF + "pagesSpec") and version 2 (sources in base64,
+ * no data) are read here; version 3 is the ZIP archive of `archive.ts`, the only
+ * format written. Legacy files never contained the data file: `data` is null.
  */
+import type { RawTable } from './data';
 import { inspectTemplate } from './generate';
 import { newId } from './composition';
 import type { Field, FontAsset, Slot, SourceFile, SourceKind } from './types';
+
+/** The data file of a project and how it was read. */
+export interface SavedData {
+  /** Original file name and bytes, unchanged (re-read only to switch sheet). */
+  name: string;
+  original: Uint8Array;
+  /** Imported cells (header row included) as used by the app: authoritative on reopening. */
+  table: RawTable;
+  header: boolean;
+  /** Effective column names (blank → letter, duplicates → _2), not recomputed on reopening. */
+  columns: string[];
+}
 
 export interface ProjectData {
   sources: SourceFile[];
@@ -13,6 +27,16 @@ export interface ProjectData {
   fields: Field[];
   fonts: FontAsset[];
   manualCount: number;
+  data: SavedData | null;
+  /** Record range as typed in the output panel (1-based, empty = all). */
+  range: { from: string; to: string };
+}
+
+export interface OpenedProject {
+  project: ProjectData;
+  warnings: string[];
+  /** Legacy JSON (v1/v2): data was never saved in these files. */
+  legacy: boolean;
 }
 
 interface ProjectFileV2 {
@@ -35,22 +59,10 @@ interface ProjectFileV1 {
   pagesSpec: string;
 }
 
-export const PROJECT_VERSION = 2;
+const NO_RANGE = { from: '', to: '' };
 
-export function serializeProject(p: ProjectData): string {
-  const file: ProjectFileV2 = {
-    app: 'DatoVariabile',
-    version: 2,
-    sources: p.sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, data: toBase64(s.bytes) })),
-    slots: p.slots,
-    fields: p.fields,
-    fonts: p.fonts.map((f) => ({ name: f.name, data: toBase64(f.bytes) })),
-    manualCount: p.manualCount,
-  };
-  return JSON.stringify(file);
-}
-
-export async function parseProject(json: string): Promise<{ project: ProjectData; warnings: string[] }> {
+/** Reads a legacy .dvp.json (version 1 or 2). */
+export async function parseProject(json: string): Promise<OpenedProject> {
   let raw: { app?: unknown; version?: unknown };
   try {
     raw = JSON.parse(json);
@@ -58,7 +70,8 @@ export async function parseProject(json: string): Promise<{ project: ProjectData
     throw new Error('Il file non è un progetto DatoVariabile (JSON non valido)');
   }
   if (raw?.app !== 'DatoVariabile') throw new Error('Il file non è un progetto DatoVariabile');
-  if (raw.version === 1) return migrateV1(raw as ProjectFileV1);
+  if (raw.version === 1) return { ...(await migrateV1(raw as ProjectFileV1)), legacy: true };
+  if (raw.version === 3) throw new Error('Questo è il manifest di un archivio .dvp.zip: apri l’archivio ZIP, non il file estratto');
   if (raw.version !== 2) throw new Error(`Progetto in un formato più recente (versione ${raw.version}): aggiorna DatoVariabile`);
   const p = raw as ProjectFileV2;
   const sources = p.sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, bytes: fromBase64(s.data) }));
@@ -73,8 +86,11 @@ export async function parseProject(json: string): Promise<{ project: ProjectData
       fields: p.fields.filter((f) => slotIds.has(f.slot)),
       fonts: p.fonts.map((f) => ({ name: f.name, bytes: fromBase64(f.data) })),
       manualCount: p.manualCount,
+      data: null,
+      range: NO_RANGE,
     },
     warnings,
+    legacy: true,
   };
 }
 
@@ -87,7 +103,7 @@ async function migrateV1(p: ProjectFileV1): Promise<{ project: ProjectData; warn
   const warnings: string[] = [];
   const fonts = p.fonts.map((f) => ({ name: f.name, bytes: fromBase64(f.data) }));
   if (!p.template) {
-    return { project: { sources: [], slots: [], fields: [], fonts, manualCount: p.manualCount }, warnings: p.fields.length ? ['Il progetto non contiene la velina: zone non recuperabili'] : [] };
+    return { project: { sources: [], slots: [], fields: [], fonts, manualCount: p.manualCount, data: null, range: NO_RANGE }, warnings: p.fields.length ? ['Il progetto non contiene la velina: zone non recuperabili'] : [] };
   }
   const bytes = fromBase64(p.template.data);
   const pageCount = (await inspectTemplate(bytes)).length;
@@ -116,7 +132,7 @@ async function migrateV1(p: ProjectFileV1): Promise<{ project: ProjectData; warn
     // Deep copies: counter and colour objects must not be shared between the copies.
     targets.forEach((slot, i) => fields.push({ ...structuredClone(rest), id: i === 0 ? old.id : newId('f'), slot: slot.id } as Field));
   }
-  return { project: { sources: [source], slots, fields, fonts, manualCount: p.manualCount }, warnings };
+  return { project: { sources: [source], slots, fields, fonts, manualCount: p.manualCount, data: null, range: NO_RANGE }, warnings };
 }
 
 /** Parses "1,3-4" into 0-based page indices; empty means all pages (version 1 "pagesSpec"). */
@@ -135,12 +151,6 @@ export function parsePages(spec: string, pageCount: number): number[] {
     }
   }
   return out;
-}
-
-function toBase64(bytes: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
 }
 
 function fromBase64(b64: string): Uint8Array {

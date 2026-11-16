@@ -14,6 +14,7 @@
  * profile is ignored with a warning, so that a K-only black stays K-only on press.
  */
 import { PDFHexString, type PDFDocument, type PDFRef } from 'pdf-lib';
+import { crc32 } from './crc32';
 import type { Matrix, RasterLayout, TemplatePage } from './types';
 
 export type RasterKind = 'jpeg' | 'png';
@@ -351,21 +352,6 @@ interface PngInfo {
 
 const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
 const DEPTHS: Record<number, number[]> = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
-
-let crcTable: Uint32Array | null = null;
-function crc32(data: Uint8Array): number {
-  if (!crcTable) {
-    crcTable = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      crcTable[n] = c >>> 0;
-    }
-  }
-  let c = 0xffffffff;
-  for (let i = 0; i < data.length; i++) c = crcTable[(c ^ data[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
 
 function parsePng(b: Uint8Array): PngInfo {
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

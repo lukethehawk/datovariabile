@@ -65,9 +65,27 @@ Accanto alle impostazioni vedi la risoluzione di stampa effettiva, con un avviso
 
 Senza dati e senza zone, con **Record da generare** impostato a 1 (predefinito), **Crea PDF** produce un PDF con le immagini, nell'ordine della composizione.
 
-Trascinando i file sulla finestra: PDF/JPG/PNG = velina, Excel/CSV/TXT = dati, TTF/OTF = font, `.json` = progetto.
+Trascinando i file sulla finestra: PDF/JPG/PNG = velina, Excel/CSV/TXT = dati, TTF/OTF = font, `.dvp.zip`/`.json` = progetto.
 
-**Salva progetto** crea un file `.dvp.json` con zone, tutti i file velina, l'ordine delle pagine, le impostazioni delle immagini e i font: la prossima volta lo riapri e carichi solo i nuovi dati. I dati non vengono salvati nel progetto: finché non li ricarichi, l'anteprima segnala le colonne mancanti. I progetti salvati con la versione precedente si aprono ancora: vengono convertiti in automatico.
+**Salva progetto** crea un unico file `NomeProgetto.dvp.zip` (il nome del progetto aperto, altrimenti quello della prima velina) con: le veline originali (PDF, JPG o PNG, non modificate e ognuna una sola volta), il file dati originale (Excel, CSV o TXT), una copia dei dati usati, i font caricati e tutte le impostazioni, cioè pagine e loro ordine, impostazioni delle immagini, zone, contatori, intervallo di record e numero di record senza dati. Riaprendolo con **Apri progetto** ritrovi tutto com'era al salvataggio, compreso il foglio Excel scelto e l'indicazione delle intestazioni: non serve ricaricare i dati.
+
+### Cosa c'è nel file .dvp.zip
+
+È un normale file ZIP: si apre con Esplora risorse (doppio clic) o con qualsiasi programma ZIP. Dentro trovi:
+
+- `progetto.json`: tutte le impostazioni, con i riferimenti agli altri file;
+- `LEGGIMI.txt`: queste spiegazioni, in breve;
+- `veline/`: i file di partenza (PDF, JPG, PNG) così come li hai caricati;
+- `dati/`: il file dati originale (`dati/originale-...`) e i dati usati `dati/dati-usati.csv` (UTF-8, separatore `;`, prima riga = intestazioni se attive);
+- `font/`: i font caricati.
+
+Per recuperare i dati basta estrarre `dati/dati-usati.csv` (oppure il file originale `dati/originale-...`).
+
+Attenzione: se apri il CSV con Excel, Excel può trasformare alcuni valori (per esempio `001234` diventa `1234`); dentro DatoVariabile il valore resta corretto. Se modifichi il CSV e ricrei lo ZIP, all'apertura DatoVariabile usa i dati modificati e te lo segnala.
+
+**Privacy.** Il file contiene anche i dati importati (nomi, indirizzi, codici…): condividilo solo con chi è autorizzato a vederli. Tutto resta sul tuo PC, nessun file viene caricato online.
+
+**Progetti delle versioni precedenti.** I file `.dvp.json` si aprono ancora con **Apri progetto**. Non contenevano i dati: se le zone usano colonne compare un avviso, quindi carica il file dati e salva di nuovo, ottenendo il nuovo `.dvp.zip`.
 
 ### Profili colore
 
@@ -102,7 +120,7 @@ A ogni push su `main` GitHub Actions esegue test e build e pubblica su GitHub Pa
 
 Struttura:
 
-- `src/core/`: logica senza interfaccia: generazione PDF con pdf-lib (`generate.ts`), composizione delle pagine (`composition.ts`), immagini JPEG/PNG senza perdita (`raster.ts`), formato progetto e conversione dei vecchi progetti (`project.ts`), lettura dati, segnaposto, impaginazione testo, codici a barre vettoriali;
+- `src/core/`: logica senza interfaccia: generazione PDF con pdf-lib (`generate.ts`), composizione delle pagine (`composition.ts`), immagini JPEG/PNG senza perdita (`raster.ts`), salvataggio e apertura del progetto `.dvp.zip` (`archive.ts`, `zip.ts`, `data.ts`) e conversione dei vecchi progetti (`project.ts`), lettura dati, segnaposto, impaginazione testo, codici a barre vettoriali;
 - `src/ui/`: interfaccia (anteprima con pdf.js, pannello delle pagine, editor delle zone, pannelli);
 - `src/worker.ts`: la generazione gira in un Web Worker, l'interfaccia resta reattiva e si può annullare; lo stesso worker prepara l'anteprima delle pagine immagine.
 
@@ -112,6 +130,7 @@ Per chi sviluppa (anche agenti AI): [AGENTS.md](AGENTS.md) contiene la memoria d
 
 ## Limiti attuali
 
+- Il progetto (`.dvp.zip`) si può salvare e aprire fino a 512 MB (veline, dati e font compresi) e con al massimo 5 milioni di celle di dati: oltre, il salvataggio si ferma con un messaggio invece di creare un file che non si riaprirebbe.
 - Nessun modulo di imposizione (più pose per foglio): ogni record occupa una pagina o più, quante sono le pagine della composizione.
 - I PDF velina non devono essere protetti da password.
 - JPEG: solo 8 bit standard o progressivi (non 12 bit, lossless o aritmetici).

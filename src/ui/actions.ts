@@ -1,12 +1,13 @@
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { inspectSource, newId, slotsFor, sourceKind } from '../core/composition';
+import { inspectSource, jobPage, newId, slotsFor, sourceKind } from '../core/composition';
 import { readTable, toDataSet } from '../core/data';
 import { STANDARD_FONTS } from '../core/fonts';
-import { parseProject, serializeProject } from '../core/project';
+import { readProjectFile, writeProjectArchive } from '../core/archive';
+import { ZIP_LIMITS } from '../core/zip';
 import type { SourceFile } from '../core/types';
-import { download } from './dom';
+import { download, formatBytes } from './dom';
 import { notify, state, type Source } from './state';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -20,15 +21,23 @@ export interface OpenedPdf {
 export async function openPdf(bytes: Uint8Array): Promise<OpenedPdf> {
   // pdf.js transfers the buffer to its worker: hand it a copy.
   const task = pdfjs.getDocument({ data: bytes.slice() });
-  return { pdf: await task.promise, close: () => task.destroy() };
+  try {
+    return { pdf: await task.promise, close: () => task.destroy() };
+  } catch (e) {
+    await task.destroy();
+    throw e;
+  }
 }
+
+let loads = 0;
 
 /** Parses a file into a source (PDF via pdf-lib + pdf.js, images via their headers only). */
 async function makeSource(file: SourceFile): Promise<Source> {
   const info = await inspectSource(file.bytes, file.kind);
-  if (file.kind !== 'pdf') return { ...file, info, pdf: null, close: async () => {} };
+  const rev = ++loads;
+  if (file.kind !== 'pdf') return { ...file, info, rev, pdf: null, close: async () => {} };
   const { pdf, close } = await openPdf(file.bytes);
-  return { ...file, info, pdf, close };
+  return { ...file, info, rev, pdf, close };
 }
 
 const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
@@ -102,51 +111,90 @@ export function removeFont(name: string): void {
 
 /** Routes a dropped/selected file by extension. */
 export async function openFile(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
   const name = file.name;
+  const isProject = /\.(zip|json)$/i.test(name);
+  if (isProject && file.size > ZIP_LIMITS.archive) throw new Error(`Progetto troppo grande da aprire nel browser (${formatBytes(file.size)})`);
+  const bytes = new Uint8Array(await file.arrayBuffer());
   if (sourceKind(name)) return addSource(name, bytes);
   if (/\.(xlsx|xlsm|xlsb|xls|ods|csv|tsv|txt)$/i.test(name)) {
     loadData(name, bytes);
     return `Dati caricati: ${state.data!.rows.length} record`;
   }
   if (/\.(ttf|otf)$/i.test(name)) return `Font caricato: ${addFont(name, bytes)}`;
-  if (/\.json$/i.test(name)) return openProject(name, new TextDecoder().decode(bytes));
+  if (isProject) return openProject(name, bytes);
   throw new Error(`Formato non supportato: ${name}`);
 }
 
 // ---------------------------------------------------------------- project
 
-/** The project embeds the source files and fonts so it reopens in one click; data files are per job. */
-export function saveProject(): void {
-  const json = serializeProject({
-    sources: state.sources.map(({ id, name, kind, bytes }) => ({ id, name, kind, bytes })),
-    slots: state.slots,
-    fields: state.fields,
-    fonts: state.fonts,
-    manualCount: state.manualCount,
-  });
-  const base = state.sources[0]?.name.replace(/\.[^.]+$/, '') ?? 'progetto';
-  download(json, `${base}.dvp.json`, 'application/json');
+/** Name proposed for the archive: the project opened last, else the first background file. */
+function projectBaseName(): string {
+  return state.projectName ?? state.sources[0]?.name.replace(/\.[^.]+$/, '') ?? 'progetto';
 }
 
-export async function openProject(fileName: string, json: string): Promise<string> {
-  const { project, warnings } = await parseProject(json);
-  // All or nothing: if one file cannot be opened, release the ones already opened.
-  const opened = await Promise.allSettled(project.sources.map(makeSource));
-  const failed = opened.find((r) => r.status === 'rejected');
-  const sources = opened.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
-  if (failed) {
-    await Promise.all(sources.map((s) => s.close()));
-    throw failed.reason;
+/**
+ * Saves everything needed to reopen the job on another PC: backgrounds, original
+ * data file, imported table (CSV), fonts, composition, fields and settings.
+ */
+export async function saveProject(): Promise<string> {
+  // Snapshot before the first await: the user may keep editing while large files are compressed.
+  // Binary buffers are never mutated in place, so they are shared; editable metadata is cloned.
+  const src = state.source;
+  const snapshot = {
+    sources: state.sources.map(({ id, name, kind, bytes }) => ({ id, name, kind, bytes })),
+    slots: structuredClone(state.slots),
+    fields: structuredClone(state.fields),
+    fonts: [...state.fonts],
+    manualCount: state.manualCount,
+    data: src && state.data ? { name: src.name, original: src.bytes, table: src.table, header: src.header, columns: [...state.data.columns] } : null,
+    range: { from: state.rangeFrom, to: state.rangeTo },
+  };
+  const { blob, warnings } = await writeProjectArchive(snapshot);
+  const fileName = `${projectBaseName()}.dvp.zip`;
+  download(blob, fileName, 'application/zip');
+  const privacy = src ? ` · include i dati di ${src.name}: condividilo solo con chi è autorizzato` : '';
+  return [`Progetto salvato: ${fileName} (${formatBytes(blob.size)})${privacy}`, ...warnings].join(' · ');
+}
+
+/** Opens a .dvp.zip (or a legacy .dvp.json). All or nothing: on error the current job stays as it was. */
+export async function openProject(fileName: string, bytes: Uint8Array): Promise<string> {
+  const { project, warnings, legacy } = await readProjectFile(bytes);
+  // One file at a time (bounded memory); every page must resolve before the current job is replaced.
+  const sources: Source[] = [];
+  try {
+    for (const file of project.sources) sources.push(await makeSource(file));
+    for (const slot of project.slots) {
+      const source = sources.find((s) => s.id === slot.sourceId)!;
+      try {
+        jobPage(slot, source.info);
+      } catch (e) {
+        throw new Error(`Progetto danneggiato: ${source.name}, ${e instanceof Error ? e.message : e}`);
+      }
+    }
+  } catch (e) {
+    await Promise.allSettled(sources.map((s) => s.close()));
+    throw e;
   }
-  await Promise.all(state.sources.map((s) => s.close()));
+  const old = state.sources;
   state.sources = sources;
   state.slots = project.slots;
   state.fields = project.fields;
   state.fonts = project.fonts;
   state.manualCount = project.manualCount;
+  // Data and range always come from the project: never keep the data of the previous job.
+  const d = project.data;
+  state.source = d ? { name: d.name, bytes: d.original, table: d.table, header: d.header } : null;
+  state.data = d ? { columns: d.columns, rows: d.header ? d.table.cells.slice(1) : d.table.cells } : null;
+  state.rangeFrom = project.range.from;
+  state.rangeTo = project.range.to;
+  state.record = 0;
   state.slotId = project.slots.find((s) => s.enabled)?.id ?? project.slots[0]?.id ?? null;
   state.selectedId = null;
+  state.projectName = fileName.replace(/\.dvp\.(zip|json)$/i, '').replace(/\.(zip|json)$/i, '');
   notify('composition', 'fonts', 'fields', 'selection', 'output', 'view', 'data');
+  // The new job is in place: failures while releasing the old files must not look like a failed opening.
+  await Promise.allSettled(old.map((s) => s.close()));
+  const usesColumns = project.fields.some((f) => /\{(?!#\})[^{}]+\}/.test(f.content));
+  if (legacy && usesColumns) warnings.unshift('Progetto in formato precedente: i dati non erano inclusi, carica il file dati e poi salva di nuovo');
   return [`Progetto aperto: ${fileName}`, ...warnings].join(' · ');
 }

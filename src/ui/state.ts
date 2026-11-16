@@ -9,6 +9,8 @@ export const MM = 72 / 25.4;
 /** A loaded background file. PDFs keep a pdf.js document for the editor background and thumbnails. */
 export interface Source extends SourceFile {
   info: SourceInfo;
+  /** Load counter: a reopened project may reuse source ids with different bytes, caches key on this. */
+  rev: number;
   pdf: PDFDocumentProxy | null;
   close: () => Promise<void>;
 }
@@ -40,6 +42,8 @@ export const state = {
   /** 1-based inclusive range, empty = all. */
   rangeFrom: '',
   rangeTo: '',
+  /** Name of the project file opened last (proposed again when saving). */
+  projectName: null as string | null,
 };
 
 /** composition = sources or slots changed (files, order, page setup). */

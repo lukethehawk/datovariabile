@@ -31,8 +31,8 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
-export function download(bytes: Uint8Array | string, name: string, type: string): void {
-  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type }));
+export function download(bytes: Uint8Array | string | Blob, name: string, type: string): void {
+  const url = URL.createObjectURL(bytes instanceof Blob ? bytes : new Blob([bytes as BlobPart], { type }));
   const a = h('a', { href: url, download: name });
   document.body.append(a);
   a.click();

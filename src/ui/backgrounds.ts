@@ -22,7 +22,7 @@ const MAX_RASTER_DOCS = 6;
 
 /** Changes whenever the background of the slot looks different. */
 export function backgroundKey(slot: Slot): string {
-  return `${slot.sourceId}|${slot.page}|${slot.raster ? JSON.stringify(slot.raster) : ''}`;
+  return `${sourceOf(slot).rev}|${slot.page}|${slot.raster ? JSON.stringify(slot.raster) : ''}`;
 }
 
 function generateInWorker(request: WorkerRequest): Promise<Uint8Array> {

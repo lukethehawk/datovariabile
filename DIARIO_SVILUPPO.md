@@ -198,3 +198,75 @@ Anteprima ICC con pdf.js patchato o asset accanto all'HTML (rompe il single-file
 - Push di `c167051` su `main` confermato dall'utente; workflow "Pubblica su GitHub Pages" (run 43880669034) riuscito: build e deploy. Avvisi non bloccanti: action v4 su Node 20 deprecato, `ubuntu-latest` → Ubuntu 26 dal 19/10/2026.
 - Verifica del sito pubblicato in Chromium: nuovo pannello presente, nessun errore in console; fronte.pdf + retro.pdf + JPG + PNG con CSV di 50 righe, zone su tre pagine, riordino → 200 pagine, 1,53 MB (veline 1,45 MB) in 0,6 s; salvataggio e riapertura del progetto con pagine, ordine e zone. Dopo la riapertura l'anteprima segnala la colonna mancante perché i dati non sono nel progetto (comportamento voluto, ora spiegato nel README).
 - Documentazione: README con tabella di misure estesa a fronte/retro, JPEG e composizione mista, scelta della pagina in anteprima, "Copia su…", dati non salvati nel progetto, struttura dei nuovi moduli; AGENTS.md con la procedura di verifica dopo il deploy.
+
+---
+
+## 2026-11-16: Salvataggio completo del progetto (`.dvp.zip`, formato 3)
+
+### Motivazione
+
+Riaprendo un progetto `.dvp.json` il database non tornava: andava ricaricato a mano (scomodo e rischioso: si può caricare il file sbagliato) e l'anteprima mostrava `Colonna "Nome" non presente nei dati`. L'utente voleva un unico file, come in ProXDATA, da salvare oggi, portare su un altro PC e riaprire domani con grafica, database e impostazioni identici. Nient'altro di ProXDATA in questo intervento.
+
+### Analisi iniziale (stato reale del repo, HEAD 4c5b40a)
+
+- Formato scritto: `.dvp.json` v2, sorgenti e font in base64 (+33 %), tutto in una stringa JSON; dati, foglio Excel scelto, intestazioni e intervallo di record **non** salvati; v1 migrato in `migrateV1`.
+- Dati in memoria: `state.source = {name, bytes originali, table: RawTable {sheets, sheet, cells, headerGuess}, header}`, `state.data = toDataSet(...)` con colonne vuote → lettera e duplicate → `_2`. Le zone usano le colonne per nome (`{Nome}`).
+- Nessuna libreria ZIP diretta. Disponibili: pako 1.0.11 (transitiva), CFB interno di SheetJS, `CompressionStream`/`DecompressionStream` nativi ('deflate-raw' verificato in Node 24), CRC-32 già scritto per i PNG.
+- `openProject` lasciava in memoria dati e intervallo del lavoro precedente.
+
+### Council (council-opus = claude-opus-5-5 high, council-sol = gpt-6.1-sol high)
+
+Due analisi indipendenti sullo stesso brief, poi un giro di revisione incrociata. Sintesi permanente in `docs/FORMATO_PROGETTO.md` §7.
+
+- **Proposte iniziali.** Sol: ZIP con fflate + validatore proprio, `manifest.json`, file con nomi generati (`v0001.pdf`), snapshot JSON autorevole delle celle + CSV solo leggibile (tutto quotato), impostazioni d'importazione nel manifest, azzerare i dati aprendo i vecchi JSON, limiti 256/512 MiB. Opus: ZIP scritto in casa con `CompressionStream('deflate-raw')`, `progetto.json`, nomi `01-fronte.pdf` sanificati, CSV delle celle grezze come unica fonte autorevole letta con parser esplicito a `;`, nessuna impostazione d'importazione oltre foglio/intestazioni, mantenere i dati aprendo i vecchi JSON, limiti 1/1,5 GiB.
+- **Accordo dopo la revisione incrociata.** ZIP proprio (Sol: con fflate il validatore andrebbe scritto comunque; la decompressione nativa è già nel browser); CSV delle celle grezze autorevole e niente snapshot JSON (Sol riconosce che un CSV non rettangolarizzato conserva righe irregolari; colonne prese dal manifest come chiedeva Sol); `progetto.json`; `LEGGIMI.txt`; nomi con prefisso + nome ASCII; originale mai rianalizzato; vecchi JSON → dati e intervallo azzerati (Opus cambia posizione per il rischio "database sbagliato").
+- **Divergenze decise dal coordinatore.** Virgolette solo quando servono (leggibilità; round-trip identico). Impostazioni d'importazione non salvate (servirebbero solo a rianalizzare l'originale). CSV modificato a mano → usato con avviso (Opus) invece di rifiutare cambi strutturali (Sol). Limiti intermedi: archivio 512 MiB perché è letto intero in memoria; espansione ≤ max(1 MiB, 1000×).
+
+### Architettura implementata
+
+- `src/core/zip.ts` (~280 righe): writer STORE/DEFLATE (DEFLATE solo se più piccolo e dentro il rapporto accettato), lettore che valida EOCD, directory centrale, ogni intestazione locale (nome, metodo, cifratura, CRC/dimensioni salvo data descriptor, disco), consumo esatto della directory, voci non sovrapposte, duplicati anche per maiuscole; decompressione in un buffer della dimensione dichiarata interrotta appena la supera, poi dimensione esatta e CRC. Rifiuta cifratura, ZIP64, multidisco, metodi ≠ 0/8. Gli stessi limiti valgono in scrittura: ogni progetto salvato si riapre.
+- `src/core/crc32.ts`: CRC condiviso con `raster.ts`, versione asincrona che cede il controllo ogni 8 MiB.
+- `src/core/archive.ts`: `writeProjectArchive()` (instantanea → voci → manifest per primo) e `readProjectFile()` (riconosce ZIP o JSON dal contenuto; validazione completa di manifest, riferimenti, slot, layout immagine e zone — font esistente, simbologia, contatore, colore — prima di toccare lo stato; CRC del manifest confrontati con quelli dell'archivio per le risorse non modificabili).
+- `src/core/data.ts`: `writeProjectCsv()` / `parseProjectCsv()` (rigoroso, a fette invece che carattere per carattere, budget di 5 milioni di celle uguale in salvataggio e apertura).
+- `src/core/project.ts`: ora contiene il modello comune (`ProjectData` con `data` e `range`, `SavedData`) e solo la lettura dei vecchi JSON.
+- Interfaccia (`actions.ts`, `main.ts`, `index.html`, `dom.ts`, `state.ts`, `backgrounds.ts`): "Salva progetto" crea `Nome.dvp.zip` (nome del progetto aperto o della prima velina) con toast che ricorda che contiene i dati; "Apri progetto" accetta `.zip` e `.json`; apertura tutto-o-niente (file aperti uno alla volta, ogni pagina deve risolversi, poi un unico commit di composizione, zone, font, dati, intervallo, record), rilascio dei vecchi file dopo il commit; cache di anteprima e miniature con chiave per caricamento (`Source.rev`), perché un progetto riaperto può riusare gli stessi id con byte diversi.
+
+### Regole di ripristino del database
+
+CSV autorevole se il suo CRC coincide con quello del manifest: celle identiche, `rows`/`width` verificati, colonne dal manifest senza ricalcolo, foglio/intestazioni ripristinati, originale conservato per cambiare foglio. CSV diverso: dati modificati usati, colonne ricalcolate, avviso esplicito. Vecchi JSON: nessun dato inventato; avviso solo se le zone usano colonne.
+
+### Problemi incontrati
+
+- SheetJS aggiunge proprietà non numeriche all'array che legge: i confronti di byte nei test usano `Array.from`.
+- `TextDecoder` toglie già il BOM: lo stripping aggiuntivo eliminava un U+FEFF legittimo nella prima cella (trovato dalla revisione).
+- Il browser headless di OMP non pilota Firefox: prova Firefox fatta con `playwright-core` installato in una cartella temporanea fuori dal repo.
+
+### Revisione indipendente (GPT-6.1 Sol High, subagente `council-sol`; Advisor disattivato)
+
+Rilievi verificati e corretti: (1) writer che poteva produrre archivi rifiutati dal lettore (voci, dimensioni, rapporto) → stessi limiti in scrittura; (2) salvataggio senza istantanea coerente → clone sincrono dei metadati prima del primo `await`; (3) validazione insufficiente (zone incomplete, `slot.page` inesistente scoperti dopo il commit) → `checkFields()` completo anche per i vecchi JSON e risoluzione di ogni pagina prima del commit; (4) CRC del manifest ignorati per le risorse → confronto con il CRC dell'archivio; (5) U+FEFF nella prima cella perso → rimosso lo stripping doppio; (6) cache di anteprima non invalidate → chiave per caricamento; (7) intestazione locale non confrontata con la centrale → metodo, flag, CRC, dimensioni, disco, fine directory; (8) errori di chiusura dei vecchi file trattati come apertura fallita, task pdf.js non distrutto in errore → corretti; (9) memoria in apertura → file aperti in sequenza e budget di celle.
+
+### Test eseguiti
+
+- Automatici: `tests/archive.test.ts` (round-trip completo con CSV difficile, Excel con secondo foglio e intestazioni spente, progetto senza dati, CSV modificato, archivi non-progetto), `tests/zip.test.ts` e `tests/csv.test.ts` (scritti da subagenti TASK e ricontrollati: archivi ostili, limiti, isSafePath, tutti i casi CSV richiesti, TXT a colonna singola, intestazioni duplicate), `tests/project.test.ts` (v1/v2).
+- Windows: archivio estratto con `Expand-Archive` e letto con `System.IO.Compression.ZipFile` (nomi, dimensioni, metodi corretti; originale identico; CSV con BOM e CRLF).
+- Chromium da `file://`: PDF×2 + JPG + PNG + CSV con valori difficili + font Arial, pagine duplicate e riordinate, intervallo 2–3 → salva, ricarica, apri: composizione, zone, dati, font e intervallo identici; PDF rigenerato con testo e pagine identici (differenze solo nei metadati). Excel a due fogli (foglio 2, intestazioni spente), TXT a una colonna, progetto di sole immagini, vecchio v1 (dati del lavoro precedente azzerati, avviso, risalvato come `.dvp.zip`), ZIP troncato ed Excel rinominato in `.zip` (messaggi chiari, stato invariato).
+- Firefox 159 da `file://`: carica, salva, ricarica, riapre (stato identico) e genera.
+
+### Benchmark (Node 24, mediana di 3, sorgenti PDF 2,5 MB + JPEG + PNG 3,6 MB)
+
+| Scenario | Sorgenti | JSON v2 | ZIP v3 | Salva v2 / v3 | Apri v2 / v3 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Solo PDF | 2,49 MB | 3,34 MB | 2,49 MB | 8 / 15 ms | 16 / 12 ms |
+| PDF + JPEG + PNG | 6,62 MB | 8,85 MB | 6,63 MB | 20 / 28 ms | 33 / 23 ms |
+| + CSV 10.000×6 | 6,62 MB | 8,85 MB (senza dati) | 6,84 MB | 22 / 67 ms | 35 / 45 ms |
+| + Excel 100.000×6 | 6,62 MB | 8,85 MB (senza dati) | 15,66 MB | 21 / 280 ms | 33 / 184 ms |
+
+Senza dati lo ZIP è il 25 % più piccolo del JSON (niente base64, PDF/JPG/PNG in STORE). Con un Excel grande cresce perché contiene originale (7,9 MB) e CSV: è il costo dell'autosufficienza, non una duplicazione delle veline. Il CRC pesa 32–85 % del tempo d'apertura; i tempi restano sotto 0,3 s, nessun worker necessario.
+
+### Limiti conosciuti
+
+Progetto apribile fino a 512 MiB (letto in memoria); niente ZIP64; 5 milioni di celle; Excel che apre `dati-usati.csv` può trasformare `001234` in `1234` (documentato in LEGGIMI e README); un archivio ricompresso da strumenti che cambiano i nomi delle voci non si riapre (i percorsi sono quelli del manifest).
+
+### Miglioramenti futuri
+
+Salvataggio/apertura in un worker se compaiono progetti molto grandi; lettura dello ZIP da `File` a blocchi invece che intero in memoria; eventuale scelta "salva senza dati" se l'utente la chiederà.

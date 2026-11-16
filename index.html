@@ -12,8 +12,8 @@
       <label class="btn" title="PDF, JPG o PNG da usare come velina; più file = più pagine per record (es. fronte e retro)">📄 Velina<input id="in-template" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple hidden /></label>
       <label class="btn" title="Excel, CSV o TXT con i dati variabili">📊 Dati<input id="in-data" type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.txt" hidden /></label>
       <span class="sep"></span>
-      <label class="btn" title="Apri un progetto salvato (.dvp.json)">📂 Apri progetto<input id="in-project" type="file" accept=".json" hidden /></label>
-      <button id="btn-save" class="btn" type="button" title="Salva zone, velina e font in un file .dvp.json">💾 Salva progetto</button>
+      <label class="btn" title="Apri un progetto salvato (.dvp.zip, oppure .dvp.json delle versioni precedenti)">📂 Apri progetto<input id="in-project" type="file" accept=".zip,.json" hidden /></label>
+      <button id="btn-save" class="btn" type="button" title="Salva in un unico file .dvp.zip veline, dati, zone, impostazioni e font (contiene anche i dati importati)">💾 Salva progetto</button>
       <span id="template-name" class="muted"></span>
       <span class="spacer"></span>
       <button id="btn-generate" class="btn primary" type="button">Crea PDF</button>
@@ -84,7 +84,7 @@
       </aside>
     </main>
     <div id="toast" class="toast"></div>
-    <div class="drop-hint">Rilascia i file: PDF/JPG/PNG = velina · Excel/CSV/TXT = dati · TTF/OTF = font · .json = progetto</div>
+    <div class="drop-hint">Rilascia i file: PDF/JPG/PNG = velina · Excel/CSV/TXT = dati · TTF/OTF = font · .dvp.zip/.json = progetto</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
