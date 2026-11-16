@@ -1,27 +1,73 @@
 import * as pdfjs from 'pdfjs-dist';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { inspectSource, newId, slotsFor, sourceKind } from '../core/composition';
 import { readTable, toDataSet } from '../core/data';
-import { inspectTemplate } from '../core/generate';
 import { STANDARD_FONTS } from '../core/fonts';
-import type { Field } from '../core/types';
+import { parseProject, serializeProject } from '../core/project';
+import type { SourceFile } from '../core/types';
 import { download } from './dom';
-import { notify, state } from './state';
+import { notify, state, type Source } from './state';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
+export interface OpenedPdf {
+  pdf: PDFDocumentProxy;
+  close: () => Promise<void>;
+}
+
 /** Opens a PDF with pdf.js; `close()` releases it (the worker-side document included). */
-export async function openPdf(bytes: Uint8Array) {
+export async function openPdf(bytes: Uint8Array): Promise<OpenedPdf> {
   // pdf.js transfers the buffer to its worker: hand it a copy.
   const task = pdfjs.getDocument({ data: bytes.slice() });
   return { pdf: await task.promise, close: () => task.destroy() };
 }
 
-export async function loadTemplate(name: string, bytes: Uint8Array): Promise<void> {
-  const pages = await inspectTemplate(bytes);
-  const { pdf, close } = await openPdf(bytes);
-  await state.template?.close();
-  state.template = { name, bytes, pages, pdf, close };
-  notify('template', 'fields', 'view');
+/** Parses a file into a source (PDF via pdf-lib + pdf.js, images via their headers only). */
+async function makeSource(file: SourceFile): Promise<Source> {
+  const info = await inspectSource(file.bytes, file.kind);
+  if (file.kind !== 'pdf') return { ...file, info, pdf: null, close: async () => {} };
+  const { pdf, close } = await openPdf(file.bytes);
+  return { ...file, info, pdf, close };
+}
+
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+/**
+ * Adds a PDF/JPG/PNG and appends all its pages to the composition. A file already
+ * loaded (same bytes) is reused, so it is stored once in memory and in the project.
+ */
+export async function addSource(name: string, bytes: Uint8Array): Promise<string> {
+  const kind = sourceKind(name);
+  if (!kind) throw new Error(`Formato non supportato come velina: ${name}`);
+  let source = state.sources.find((s) => sameBytes(s.bytes, bytes));
+  if (!source) {
+    try {
+      source = await makeSource({ id: newId('src'), name, kind, bytes });
+    } catch (e) {
+      throw new Error(`${name}: ${e instanceof Error ? e.message : e}`);
+    }
+    state.sources.push(source);
+  }
+  const slots = slotsFor(source.id, source.info);
+  state.slots.push(...slots);
+  state.slotId ??= slots[0].id;
+  notify('composition', 'fields', 'view');
+  return slots.length > 1 ? `${name}: ${slots.length} pagine aggiunte` : `${name}: pagina aggiunta`;
+}
+
+/** Removes a file with its pages and the fields placed on them. */
+export async function removeSource(id: string): Promise<void> {
+  const source = state.sources.find((s) => s.id === id);
+  if (!source) return;
+  const gone = new Set(state.slots.filter((s) => s.sourceId === id).map((s) => s.id));
+  state.slots = state.slots.filter((s) => !gone.has(s.id));
+  state.fields = state.fields.filter((f) => !gone.has(f.slot));
+  state.sources = state.sources.filter((s) => s !== source);
+  if (state.slotId && gone.has(state.slotId)) state.slotId = state.slots[0]?.id ?? null;
+  if (state.selectedId && !state.fields.some((f) => f.id === state.selectedId)) state.selectedId = null;
+  await source.close();
+  notify('composition', 'fields', 'selection', 'view');
 }
 
 export function loadData(name: string, bytes: Uint8Array, sheet?: string): void {
@@ -58,70 +104,49 @@ export function removeFont(name: string): void {
 export async function openFile(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const name = file.name;
-  if (/\.pdf$/i.test(name)) {
-    await loadTemplate(name, bytes);
-    return `Velina caricata: ${name}`;
-  }
+  if (sourceKind(name)) return addSource(name, bytes);
   if (/\.(xlsx|xlsm|xlsb|xls|ods|csv|tsv|txt)$/i.test(name)) {
     loadData(name, bytes);
     return `Dati caricati: ${state.data!.rows.length} record`;
   }
   if (/\.(ttf|otf)$/i.test(name)) return `Font caricato: ${addFont(name, bytes)}`;
-  if (/\.json$/i.test(name)) {
-    await openProject(new TextDecoder().decode(bytes));
-    return `Progetto aperto: ${name}`;
-  }
+  if (/\.json$/i.test(name)) return openProject(name, new TextDecoder().decode(bytes));
   throw new Error(`Formato non supportato: ${name}`);
 }
 
 // ---------------------------------------------------------------- project
 
-interface ProjectFile {
-  app: 'DatoVariabile';
-  version: 1;
-  fields: Field[];
-  fonts: Array<{ name: string; data: string }>;
-  template: { name: string; data: string } | null;
-  manualCount: number;
-  pagesSpec: string;
-}
-
-/** The project embeds template and fonts so it reopens in one click; data files are per job. */
+/** The project embeds the source files and fonts so it reopens in one click; data files are per job. */
 export function saveProject(): void {
-  const project: ProjectFile = {
-    app: 'DatoVariabile',
-    version: 1,
+  const json = serializeProject({
+    sources: state.sources.map(({ id, name, kind, bytes }) => ({ id, name, kind, bytes })),
+    slots: state.slots,
     fields: state.fields,
-    fonts: state.fonts.map((f) => ({ name: f.name, data: toBase64(f.bytes) })),
-    template: state.template ? { name: state.template.name, data: toBase64(state.template.bytes) } : null,
+    fonts: state.fonts,
     manualCount: state.manualCount,
-    pagesSpec: state.pagesSpec,
-  };
-  const base = state.template?.name.replace(/\.pdf$/i, '') ?? 'progetto';
-  download(JSON.stringify(project), `${base}.dvp.json`, 'application/json');
+  });
+  const base = state.sources[0]?.name.replace(/\.[^.]+$/, '') ?? 'progetto';
+  download(json, `${base}.dvp.json`, 'application/json');
 }
 
-export async function openProject(json: string): Promise<void> {
-  const p = JSON.parse(json) as ProjectFile;
-  if (p.app !== 'DatoVariabile') throw new Error('Il file non è un progetto DatoVariabile');
-  state.fonts = p.fonts.map((f) => ({ name: f.name, bytes: fromBase64(f.data) }));
-  state.fields = p.fields;
-  state.manualCount = p.manualCount;
-  state.pagesSpec = p.pagesSpec;
+export async function openProject(fileName: string, json: string): Promise<string> {
+  const { project, warnings } = await parseProject(json);
+  // All or nothing: if one file cannot be opened, release the ones already opened.
+  const opened = await Promise.allSettled(project.sources.map(makeSource));
+  const failed = opened.find((r) => r.status === 'rejected');
+  const sources = opened.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+  if (failed) {
+    await Promise.all(sources.map((s) => s.close()));
+    throw failed.reason;
+  }
+  await Promise.all(state.sources.map((s) => s.close()));
+  state.sources = sources;
+  state.slots = project.slots;
+  state.fields = project.fields;
+  state.fonts = project.fonts;
+  state.manualCount = project.manualCount;
+  state.slotId = project.slots.find((s) => s.enabled)?.id ?? project.slots[0]?.id ?? null;
   state.selectedId = null;
-  if (p.template) await loadTemplate(p.template.name, fromBase64(p.template.data));
-  notify('fonts', 'fields', 'selection', 'output');
-}
-
-function toBase64(bytes: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
-function fromBase64(b64: string): Uint8Array {
-  const s = atob(b64);
-  const out = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
-  return out;
+  notify('composition', 'fonts', 'fields', 'selection', 'output', 'view', 'data');
+  return [`Progetto aperto: ${fileName}`, ...warnings].join(' · ');
 }

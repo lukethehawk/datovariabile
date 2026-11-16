@@ -2,7 +2,7 @@ import { SYMBOLOGIES } from '../core/barcode';
 import { STANDARD_FONTS } from '../core/fonts';
 import type { BarcodeField, ColorSpec, Field, Rotation, TextField } from '../core/types';
 import { $, h } from './dom';
-import { cloneField, createField, MM, notify, on, selectedField, state } from './state';
+import { cloneField, createField, currentSlot, MM, notify, on, selectedField, state } from './state';
 
 const listEl = $('#field-list');
 const propsEl = $('#props');
@@ -11,6 +11,7 @@ const propsEl = $('#props');
 let syncers: Array<() => void> = [];
 
 function renderList(): void {
+  const pageNo = (f: Field) => state.slots.findIndex((s) => s.id === f.slot) + 1;
   listEl.replaceChildren(
     ...state.fields.map((f) =>
       h(
@@ -19,8 +20,8 @@ function renderList(): void {
           class: f.id === state.selectedId ? 'selected' : '',
           onclick: () => {
             state.selectedId = f.id;
-            if (f.page !== state.page) {
-              state.page = f.page;
+            if (f.slot !== state.slotId) {
+              state.slotId = f.slot;
               notify('view');
             }
             notify('selection');
@@ -28,7 +29,7 @@ function renderList(): void {
         },
         h('span', { class: `kind ${f.type}` }, f.type === 'text' ? 'T' : '▥'),
         h('span', { class: 'name' }, f.name),
-        state.template && state.template.pages.length > 1 ? h('span', { class: 'muted' }, `p.${f.page + 1}`) : null,
+        state.slots.length > 1 ? h('span', { class: 'muted' }, `p.${pageNo(f)}`) : null,
       ),
     ),
   );
@@ -199,7 +200,24 @@ function renderProps(): void {
     return;
   }
   const content = textInput(f, (x) => x.content, (x, v) => (x.content = v), true) as HTMLTextAreaElement;
-  const pageOptions = (state.template?.pages ?? []).map((_, i) => [i, `Pagina ${i + 1}`] as [number, string]);
+  const pageOptions = state.slots.map((s, i) => [s.id, `Pagina ${i + 1}`] as [string, string]);
+  const copyTo = h(
+    'select',
+    {
+      title: 'Crea una copia della zona, nella stessa posizione, su un’altra pagina',
+      onchange: (e: Event) => {
+        const target = (e.target as HTMLSelectElement).value;
+        if (!target) return;
+        const copy = cloneField(f, target);
+        state.fields.push(copy);
+        state.selectedId = copy.id;
+        state.slotId = target;
+        notify('fields', 'selection', 'view');
+      },
+    },
+    h('option', { value: '' }, 'Copia su…'),
+    ...pageOptions.filter(([id]) => id !== f.slot).map(([id, label]) => h('option', { value: id }, label)),
+  );
 
   const sections: Node[] = [
     h('div', { class: 'props-head' },
@@ -244,11 +262,11 @@ function renderProps(): void {
       h('div', { class: 'grid2' },
         row('Rotazione', select<Rotation>(f, [[0, '0°'], [90, '90° ↺'], [180, '180°'], [270, '270° ↻']], (x) => x.rotation, (x, v) => (x.rotation = v))),
         pageOptions.length > 1
-          ? row('Pagina', select(f, pageOptions, (x) => x.page, (x, v) => {
-              x.page = v;
-              state.page = v;
+          ? row('Pagina', select(f, pageOptions, (x) => x.slot, (x, v) => {
+              x.slot = v;
+              state.slotId = v;
               notify('view');
-            }))
+            }), copyTo)
           : h('span'),
       ),
       row('Margine interno (mm)', numberInput(f, (x) => x.margin / MM, (x, v) => (x.margin = Math.max(0, v) * MM), { min: 0 })),
@@ -300,12 +318,13 @@ const round = (v: number) => Math.round(v * 100) / 100;
 const clampPct = (v: number) => Math.min(100, Math.max(0, v));
 
 export function initProps(): void {
-  on(['fields', 'selection', 'template'], renderList);
-  on(['selection', 'fonts', 'data', 'template'], renderProps);
+  on(['fields', 'selection', 'composition'], renderList);
+  on(['selection', 'fonts', 'data', 'composition'], renderProps);
   on(['fields', 'geometry'], () => syncers.forEach((s) => s()));
   const add = (type: Field['type']) => {
-    if (!state.template) return;
-    const f = createField(type);
+    const slot = currentSlot();
+    if (!slot) return;
+    const f = createField(type, slot);
     state.fields.push(f);
     state.selectedId = f.id;
     notify('fields', 'selection');

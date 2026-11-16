@@ -1,9 +1,23 @@
 import type { RenderTask } from 'pdfjs-dist';
-import { generate } from '../core/generate';
+import { generate, type JobPage } from '../core/generate';
 import type { Field } from '../core/types';
 import { openPdf } from './actions';
+import { backgroundKey, withSlotPage } from './backgrounds';
 import { $, errorMessage, h } from './dom';
-import { MM, notify, on, recordCount, selectedField, state } from './state';
+import { currentSlot, MM, notify, on, recordCount, selectedField, slotLabel, slotPage, state } from './state';
+
+/** Page shown in the editor, or null without a composition (or an unresolvable page setup). */
+function currentPage(): JobPage | null {
+  const slot = currentSlot();
+  if (!slot) return null;
+  try {
+    return slotPage(slot);
+  } catch (e) {
+    previewError.textContent = errorMessage(e);
+    previewError.hidden = false;
+    return null;
+  }
+}
 
 const viewport = $('#viewport');
 const pageEl = $('#page');
@@ -15,35 +29,39 @@ const previewError = $('#preview-error');
 /** Current CSS pixels per PDF point. */
 let scale = 1;
 
-function computeScale(): number {
-  const page = state.template?.pages[state.page];
-  if (!page) return 1;
+function computeScale(page: JobPage): number {
   if (state.zoom > 0) return state.zoom;
   const pad = 48;
-  return Math.max(0.05, Math.min((viewport.clientWidth - pad) / page.viewWidth, (viewport.clientHeight - pad) / page.viewHeight));
+  const { viewWidth, viewHeight } = page.geometry;
+  return Math.max(0.05, Math.min((viewport.clientWidth - pad) / viewWidth, (viewport.clientHeight - pad) / viewHeight));
 }
 
 // ------------------------------------------------------------- rendering
 
 let bgTask: RenderTask | null = null;
 let bgKey = '';
+let bgSeq = 0;
 
 async function renderBackground(): Promise<void> {
-  const t = state.template;
-  if (!t) return;
+  const slot = currentSlot();
+  if (!slot) return;
   const dpr = window.devicePixelRatio || 1;
-  const key = `${t.name}|${t.bytes.length}|${state.page}|${scale}|${dpr}`;
+  const key = `${backgroundKey(slot)}|${scale}|${dpr}`;
   if (key === bgKey) return;
   bgKey = key;
+  const seq = ++bgSeq;
   bgTask?.cancel();
-  const page = await t.pdf.getPage(state.page + 1);
-  const vp = page.getViewport({ scale: scale * dpr });
-  bgCanvas.width = Math.round(vp.width);
-  bgCanvas.height = Math.round(vp.height);
-  bgTask = page.render({ canvas: bgCanvas, viewport: vp });
   try {
-    await bgTask.promise;
+    await withSlotPage(slot, async (page) => {
+      if (seq !== bgSeq) return;
+      const vp = page.getViewport({ scale: scale * dpr });
+      bgCanvas.width = Math.round(vp.width);
+      bgCanvas.height = Math.round(vp.height);
+      bgTask = page.render({ canvas: bgCanvas, viewport: vp });
+      await bgTask.promise;
+    });
   } catch (e) {
+    if (seq === bgSeq) bgKey = ''; // retry on the next layout
     if ((e as Error).name !== 'RenderingCancelledException') throw e;
   }
 }
@@ -53,12 +71,12 @@ let overlayTask: RenderTask | null = null;
 
 /** Renders the variable data of the current record with the real generator (WYSIWYG). */
 async function renderOverlay(): Promise<void> {
-  const t = state.template;
   const seq = ++overlaySeq;
   const ctx = overlayCanvas.getContext('2d')!;
-  if (!t) return;
+  const page = currentPage();
+  if (!page) return;
   const dpr = window.devicePixelRatio || 1;
-  const fields = state.fields.filter((f) => f.page === state.page);
+  const fields = state.fields.filter((f) => f.slot === page.slot);
   previewError.hidden = true;
   if (fields.length === 0 || recordCount() === 0) {
     ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -66,29 +84,20 @@ async function renderOverlay(): Promise<void> {
   }
   try {
     const record = Math.min(state.record, recordCount() - 1);
-    const { bytes } = await generate({
-      template: null,
-      pages: t.pages,
-      pageIndices: [state.page],
-      fields,
-      fonts: state.fonts,
-      data: state.data,
-      from: record,
-      to: record,
-    });
+    const { bytes } = await generate({ sources: null, pages: [page], fields, fonts: state.fonts, data: state.data, from: record, to: record });
     if (seq !== overlaySeq) return;
     const doc = await openPdf(bytes);
     try {
       if (seq !== overlaySeq) return;
       overlayTask?.cancel();
-      const page = await doc.pdf.getPage(1);
-      const vp = page.getViewport({ scale: scale * dpr });
+      const pdfPage = await doc.pdf.getPage(1);
+      const vp = pdfPage.getViewport({ scale: scale * dpr });
       // Render off-screen first so the visible overlay never flickers.
       const tmp = document.createElement('canvas');
       tmp.width = Math.round(vp.width);
       tmp.height = Math.round(vp.height);
       // Own context: pdf.js would create an opaque (alpha: false) one, painting transparency black.
-      overlayTask = page.render({ canvas: null, canvasContext: tmp.getContext('2d')!, viewport: vp, background: 'rgba(0,0,0,0)' });
+      overlayTask = pdfPage.render({ canvas: null, canvasContext: tmp.getContext('2d')!, viewport: vp, background: 'rgba(0,0,0,0)' });
       await overlayTask.promise;
       if (seq !== overlaySeq) return;
       overlayCanvas.width = tmp.width;
@@ -111,13 +120,14 @@ function scheduleOverlay(): void {
 }
 
 function layout(): void {
-  const page = state.template?.pages[state.page];
-  $('#empty').hidden = Boolean(page);
+  previewError.hidden = true;
+  const page = currentPage();
+  $('#empty').hidden = state.slots.length > 0;
   pageEl.hidden = !page;
   if (!page) return;
-  scale = computeScale();
-  const w = page.viewWidth * scale;
-  const hgt = page.viewHeight * scale;
+  scale = computeScale(page);
+  const w = page.geometry.viewWidth * scale;
+  const hgt = page.geometry.viewHeight * scale;
   for (const el of [pageEl, bgCanvas, overlayCanvas]) {
     el.style.width = `${w}px`;
     el.style.height = `${hgt}px`;
@@ -146,7 +156,7 @@ function placeBox(el: HTMLElement, f: Field): void {
 function drawBoxes(): void {
   boxesEl.replaceChildren();
   for (const f of state.fields) {
-    if (f.page !== state.page) continue;
+    if (f.slot !== state.slotId) continue;
     const selected = f.id === state.selectedId;
     const box = h(
       'div',
@@ -171,7 +181,7 @@ function startDrag(ev: PointerEvent, f: Field, box: HTMLElement): void {
     box = boxesEl.querySelector<HTMLElement>(`[data-id="${f.id}"]`)!;
   }
   const handle = ((ev.target as HTMLElement).dataset.handle ?? 'move') as Handle;
-  const page = state.template!.pages[state.page];
+  const page = currentPage()!.geometry;
   const start = { px: ev.clientX, py: ev.clientY, x: f.x, y: f.y, w: f.w, h: f.h };
   let moved = false;
   box.setPointerCapture(ev.pointerId);
@@ -215,14 +225,20 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 // ------------------------------------------------------------- toolbar
 
 function renderStageBar(): void {
-  const t = state.template;
   const pageSel = $('#page-select') as HTMLSelectElement;
   pageSel.replaceChildren(
-    ...(t?.pages ?? []).map((p, i) =>
-      h('option', { value: i, selected: i === state.page }, `Pagina ${i + 1} (${(p.viewWidth / MM).toFixed(0)}×${(p.viewHeight / MM).toFixed(0)} mm)`),
-    ),
+    ...state.slots.map((s, i) => {
+      let size = '';
+      try {
+        const g = slotPage(s).geometry;
+        size = ` (${(g.viewWidth / MM).toFixed(0)}×${(g.viewHeight / MM).toFixed(0)} mm)`;
+      } catch {
+        // page setup not resolvable yet: shown in the preview error
+      }
+      return h('option', { value: s.id, selected: s.id === state.slotId }, `Pagina ${i + 1}: ${slotLabel(s)}${size}${s.enabled ? '' : ' – esclusa'}`);
+    }),
   );
-  pageSel.disabled = !t || t.pages.length < 2;
+  pageSel.disabled = state.slots.length < 2;
   const n = recordCount();
   ($('#record-input') as HTMLInputElement).value = String(n ? state.record + 1 : 0);
   ($('#record-input') as HTMLInputElement).max = String(n);
@@ -230,7 +246,7 @@ function renderStageBar(): void {
 }
 
 export function initViewer(): void {
-  on(['template', 'view'], () => {
+  on(['composition', 'view'], () => {
     renderStageBar();
     layout();
     scheduleOverlay();
@@ -246,7 +262,7 @@ export function initViewer(): void {
   window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', layout);
 
   $('#page-select').addEventListener('change', (e) => {
-    state.page = Number((e.target as HTMLSelectElement).value);
+    state.slotId = (e.target as HTMLSelectElement).value;
     notify('view');
   });
   const setRecord = (r: number) => {

@@ -1,19 +1,38 @@
 import { PDFDocument, rgb, degrees } from 'pdf-lib';
+import { inspectTemplate, type Job, type JobPage, type JobSource } from '../src/core/generate';
 import type { BarcodeField, TextField } from '../src/core/types';
 
 /** A template whose single page carries ~`kb` KB of vector content. */
-export async function makeTemplate(opts: { kb: number; rotate?: number; trim?: boolean }): Promise<Uint8Array> {
+export async function makeTemplate(opts: { kb: number; rotate?: number; trim?: boolean; seed?: number }): Promise<Uint8Array> {
+  return makePdf([{ kb: opts.kb, rotate: opts.rotate, trim: opts.trim }], opts.seed);
+}
+
+/** A PDF with one page per entry (size in points, default A4). */
+export async function makePdf(
+  pages: Array<{ kb: number; size?: [number, number]; rotate?: number; trim?: boolean }>,
+  seed = 1,
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const page = doc.addPage([595, 842]);
-  if (opts.trim) page.setTrimBox(20, 20, 555, 802);
-  if (opts.rotate) page.setRotation(degrees(opts.rotate));
-  let seed = 1;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  // Random coordinates do not compress: roughly 60 bytes per rectangle.
-  for (let i = 0; i < (opts.kb * 1024) / 60; i++) {
-    page.drawRectangle({ x: rnd() * 595, y: rnd() * 842, width: rnd() * 20, height: rnd() * 20, color: rgb(rnd(), rnd(), rnd()) });
+  for (const opts of pages) {
+    const [w, h] = opts.size ?? [595, 842];
+    const page = doc.addPage([w, h]);
+    if (opts.trim) page.setTrimBox(20, 20, w - 40, h - 40);
+    if (opts.rotate) page.setRotation(degrees(opts.rotate));
+    // Random coordinates do not compress: roughly 60 bytes per rectangle.
+    for (let i = 0; i < (opts.kb * 1024) / 60; i++) {
+      page.drawRectangle({ x: rnd() * w, y: rnd() * h, width: rnd() * 20, height: rnd() * 20, color: rgb(rnd(), rnd(), rnd()) });
+    }
   }
   return doc.save();
+}
+
+/** A job over PDF sources: `pages` lists [source index, page index, slot id] in output order. */
+export async function pdfJob(sources: Uint8Array[], pages: Array<[number, number, string]>, overrides: Partial<Job> = {}): Promise<Job> {
+  const jobSources: JobSource[] = sources.map((bytes, i) => ({ id: `src${i}`, name: `file${i}.pdf`, kind: 'pdf', bytes }));
+  const geometry = await Promise.all(sources.map((b) => inspectTemplate(b)));
+  const jobPages: JobPage[] = pages.map(([s, p, slot]) => ({ slot, sourceId: `src${s}`, page: p, geometry: geometry[s][p] }));
+  return { sources: jobSources, pages: jobPages, fields: [], fonts: [], data: null, from: 0, to: 0, ...overrides };
 }
 
 export function textField(overrides: Partial<TextField> = {}): TextField {
@@ -21,7 +40,7 @@ export function textField(overrides: Partial<TextField> = {}): TextField {
     id: 't1',
     name: 'Testo',
     type: 'text',
-    page: 0,
+    slot: 's1',
     x: 100,
     y: 100,
     w: 200,
@@ -48,7 +67,7 @@ export function barcodeField(overrides: Partial<BarcodeField> = {}): BarcodeFiel
     id: 'b1',
     name: 'Codice',
     type: 'barcode',
-    page: 0,
+    slot: 's1',
     x: 300,
     y: 300,
     w: 100,

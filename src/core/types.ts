@@ -19,8 +19,8 @@ export interface Counter {
 interface FieldBase {
   id: string;
   name: string;
-  /** Index into the template pages (0-based). */
-  page: number;
+  /** Id of the composition slot (page of the record) the field belongs to. */
+  slot: string;
   x: number;
   y: number;
   w: number;
@@ -76,6 +76,9 @@ export interface DataSet {
 /** [left, bottom, right, top] in PDF user space. */
 export type Box = [number, number, number, number];
 
+/** PDF affine matrix [a b c d e f]: x' = a·x + c·y + e, y' = b·x + d·y + f. */
+export type Matrix = [number, number, number, number, number, number];
+
 export interface TemplatePage {
   mediaBox: Box;
   rotate: Rotation;
@@ -85,4 +88,40 @@ export interface TemplatePage {
   /** Displayed size of `view` (width/height swapped for 90/270). */
   viewWidth: number;
   viewHeight: number;
+}
+
+export type SourceKind = 'pdf' | 'jpeg' | 'png';
+
+/** A loaded background file: PDF (any number of pages) or a single raster image. */
+export interface SourceFile {
+  id: string;
+  name: string;
+  kind: SourceKind;
+  bytes: Uint8Array;
+}
+
+/** How a raster image becomes a page. Never crops or distorts unless `fit` says so. */
+export interface RasterLayout {
+  /** 'image' = physical size from the image resolution (`dpi`). */
+  size: 'image' | 'A3' | 'A4' | 'A5' | 'custom';
+  /** Custom page size in points (used when size = 'custom'). */
+  width: number;
+  height: number;
+  orientation: 'auto' | 'portrait' | 'landscape';
+  /** contain = whole image, centred; cover = fills the page, edges cut; stretch = distorted to the page. */
+  fit: 'contain' | 'cover' | 'stretch';
+  /** Resolution for size = 'image'; null = the one written in the file. */
+  dpi: number | null;
+}
+
+/** One page of every record: a page of a source, in composition order. */
+export interface Slot {
+  id: string;
+  sourceId: string;
+  /** Page index in the source (0 for images). */
+  page: number;
+  /** Disabled slots keep their fields but are not generated. */
+  enabled: boolean;
+  /** Page setup, raster sources only. */
+  raster?: RasterLayout;
 }

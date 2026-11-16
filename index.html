@@ -9,7 +9,7 @@
   <body>
     <header class="toolbar">
       <div class="brand">Dato<span>Variabile</span></div>
-      <label class="btn" title="PDF da usare come velina (sfondo ripetuto)">📄 Velina PDF<input id="in-template" type="file" accept=".pdf" hidden /></label>
+      <label class="btn" title="PDF, JPG o PNG da usare come velina; più file = più pagine per record (es. fronte e retro)">📄 Velina<input id="in-template" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple hidden /></label>
       <label class="btn" title="Excel, CSV o TXT con i dati variabili">📊 Dati<input id="in-data" type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.txt" hidden /></label>
       <span class="sep"></span>
       <label class="btn" title="Apri un progetto salvato (.dvp.json)">📂 Apri progetto<input id="in-project" type="file" accept=".json" hidden /></label>
@@ -21,6 +21,10 @@
 
     <main>
       <aside class="left">
+        <section>
+          <h2>Pagine per record</h2>
+          <div id="composition"></div>
+        </section>
         <section>
           <h2>Zone</h2>
           <div class="add">
@@ -49,13 +53,13 @@
         <div id="viewport" class="viewport">
           <div id="empty" class="empty">
             <div>
-              <h1>Trascina qui la velina PDF</h1>
+              <h1>Trascina qui la velina (PDF, JPG o PNG)</h1>
               <p>poi il file dati (Excel, CSV o TXT), oppure un progetto salvato.</p>
               <ol>
-                <li>Carica la <b>velina</b>: il PDF grafico da ripetere.</li>
-                <li>Carica i <b>dati</b> (facoltativo per i soli contatori).</li>
-                <li>Aggiungi le <b>zone</b> di testo o codice e posizionale.</li>
-                <li><b>Crea PDF</b>: la velina è inclusa una sola volta, il file resta leggero.</li>
+                <li>Carica una o più <b>veline</b>: PDF o immagini. Più file = più pagine per record (es. fronte e retro).</li>
+                <li>Carica i <b>dati</b> (facoltativo per i soli contatori o per un PDF da immagini).</li>
+                <li>Aggiungi le <b>zone</b> di testo o codice su ogni pagina e posizionale.</li>
+                <li><b>Crea PDF</b>: ogni velina è inclusa una sola volta, il file resta leggero.</li>
               </ol>
             </div>
           </div>
@@ -80,7 +84,7 @@
       </aside>
     </main>
     <div id="toast" class="toast"></div>
-    <div class="drop-hint">Rilascia i file: PDF = velina · Excel/CSV/TXT = dati · TTF/OTF = font · .json = progetto</div>
+    <div class="drop-hint">Rilascia i file: PDF/JPG/PNG = velina · Excel/CSV/TXT = dati · TTF/OTF = font · .json = progetto</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

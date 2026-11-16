@@ -1,22 +1,18 @@
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { describe, expect, it } from 'vitest';
-import { generate, inspectTemplate, type Job } from '../src/core/generate';
-import { barcodeField, makeTemplate, textField } from './helpers';
+import { generate, type Job } from '../src/core/generate';
+import { barcodeField, makePdf, makeTemplate, pdfJob, textField } from './helpers';
 
 async function job(template: Uint8Array, overrides: Partial<Job> = {}): Promise<Job> {
   const rows = Array.from({ length: 20 }, (_, i) => [`Nome ${i + 1}`, String(9780201379620 + i).slice(0, 12)]);
-  return {
-    template,
-    pages: await inspectTemplate(template),
-    pageIndices: [0],
-    fields: [textField()],
-    fonts: [],
-    data: { columns: ['Nome', 'EAN'], rows },
-    from: 0,
-    to: rows.length - 1,
-    ...overrides,
-  };
+  return pdfJob([template], [[0, 0, 's1']], { fields: [textField()], data: { columns: ['Nome', 'EAN'], rows }, to: rows.length - 1, ...overrides });
+}
+
+/** Streams larger than `min` bytes in the output: each one is a background copy. */
+async function bigStreams(bytes: Uint8Array, min = 50_000): Promise<number[]> {
+  const out = await PDFDocument.load(bytes);
+  return [...out.context.enumerateIndirectObjects()].flatMap(([, o]) => (o instanceof PDFRawStream && o.contents.length > min ? [o.contents.length] : []));
 }
 
 /** Text items of a page with their position in the displayed (rotated) page, y from the top. */
@@ -44,11 +40,7 @@ describe('generate', () => {
     // A copy per page would be ~100 MB; even one extra copy would exceed this bound.
     expect(res.bytes.length).toBeLessThan(template.length * 1.3 + 500 * 400);
 
-    const out = await PDFDocument.load(res.bytes);
-    const big = [...out.context.enumerateIndirectObjects()].filter(
-      ([, o]) => o instanceof PDFRawStream && o.contents.length > 100_000,
-    );
-    expect(big).toHaveLength(1);
+    expect(await bigStreams(res.bytes, 100_000)).toHaveLength(1);
   });
 
   it('keeps the template page boxes and rotation', async () => {
@@ -108,5 +100,53 @@ describe('generate', () => {
     await expect(generate(await job(template, { fields: [textField({ content: '{Cognome}' })] }))).rejects.toThrow(
       'Colonna "Cognome" non presente',
     );
+  });
+
+  it('alternates front and back from two PDFs, embedding each once', async () => {
+    const front = await makeTemplate({ kb: 150, seed: 1 });
+    const back = await makeTemplate({ kb: 120, seed: 2 });
+    const rows = Array.from({ length: 300 }, (_, i) => [`Cliente ${i + 1}`]);
+    const fields = [textField({ slot: 'F', content: 'F {Nome}' }), textField({ id: 't2', slot: 'R', content: 'R {#}' })];
+    const res = await generate(await pdfJob([front, back], [[0, 0, 'F'], [1, 0, 'R']], { fields, data: { columns: ['Nome'], rows }, to: 299 }));
+
+    expect(res.pageCount).toBe(600);
+    expect(await bigStreams(res.bytes)).toHaveLength(2);
+    expect(res.bytes.length).toBeLessThan((front.length + back.length) * 1.2 + 600 * 400);
+    expect((await textPositions(res.bytes, 3)).map((t) => t.str)).toEqual(['F Cliente 2']);
+    expect((await textPositions(res.bytes, 4)).map((t) => t.str)).toEqual(['R 2']);
+  });
+
+  it('composes several pages per record, reusing one source page with different fields', async () => {
+    // Source A: two pages of different size; source B: a landscape page rotated 90°.
+    const a = await makePdf([{ kb: 60, size: [400, 600] }, { kb: 1, size: [300, 300] }]);
+    const b = await makePdf([{ kb: 1, size: [842, 595], rotate: 90 }], 3);
+    const fields = [
+      textField({ slot: 'x', content: 'X{#}', x: 50, y: 40, size: 20, valign: 'top' }),
+      textField({ id: 't2', slot: 'y', content: 'Y{#}', x: 120, y: 200, size: 20, valign: 'top' }),
+      textField({ id: 't3', slot: 'z', content: 'Z{#}', x: 10, y: 10, size: 20, valign: 'top' }),
+    ];
+    // Order: A p.2, A p.1 (zone X), B, A p.1 again (zone Y): selection, reordering and reuse.
+    const pages: Array<[number, number, string]> = [[0, 1, 'w'], [0, 0, 'x'], [1, 0, 'z'], [0, 0, 'y']];
+    const res = await generate(await pdfJob([a, b], pages, { fields, from: 4, to: 5 }));
+
+    expect(res.pageCount).toBe(8);
+    const doc = await PDFDocument.load(res.bytes);
+    expect(doc.getPage(0).getSize()).toEqual({ width: 300, height: 300 });
+    expect(doc.getPage(1).getSize()).toEqual({ width: 400, height: 600 });
+    expect(doc.getPage(2).getRotation().angle).toBe(90);
+    expect(await bigStreams(res.bytes, 30_000)).toHaveLength(1);
+
+    const check = async (page: number, str: string, x: number, y: number) => {
+      const [item] = await textPositions(res.bytes, page);
+      expect(item.str).toBe(str);
+      expect(item.x).toBeCloseTo(x, 0);
+      expect(item.y).toBeGreaterThan(y + 12);
+      expect(item.y).toBeLessThan(y + 20);
+    };
+    // Second record (index 5): counter 6 everywhere, positions per slot in view space.
+    await check(6, 'X6', 50, 40);
+    await check(7, 'Z6', 10, 10);
+    await check(8, 'Y6', 120, 200);
+    expect(await textPositions(res.bytes, 5)).toEqual([]);
   });
 });

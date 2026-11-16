@@ -1,10 +1,12 @@
 import {
+  clip,
   cmyk,
   concatTransformationMatrix,
   decodePDFRawStream,
   degrees,
   drawObject,
   EncryptedPDFError,
+  endPath,
   PDFArray,
   PDFDocument,
   PDFName,
@@ -15,6 +17,7 @@ import {
   type PDFRef,
   popGraphicsState,
   pushGraphicsState,
+  rectangle,
   rgb,
   setFillingColor,
   setStrokingColor,
@@ -23,15 +26,34 @@ import {
 import { BarcodeRenderer } from './barcode';
 import { FontCache } from './fonts';
 import { compileContent } from './placeholders';
+import { embedRaster } from './raster';
 import { layoutText } from './text';
-import type { Box, ColorSpec, DataSet, Field, FontAsset, Rotation, TemplatePage } from './types';
+import type { Box, ColorSpec, DataSet, Field, FontAsset, Matrix, Rotation, SourceKind, TemplatePage } from './types';
+
+export interface JobSource {
+  id: string;
+  name: string;
+  kind: SourceKind;
+  bytes: Uint8Array;
+}
+
+/** One page of the per-record sequence (an enabled composition slot, resolved). */
+export interface JobPage {
+  /** Fields whose `slot` equals this id are drawn on the page. */
+  slot: string;
+  sourceId: string;
+  /** Page of the source (0 for images). */
+  page: number;
+  geometry: TemplatePage;
+  /** Raster sources: image unit square → page, and clipping to the page (fit = cover). See rasterPage(). */
+  image?: { matrix: Matrix; clip: boolean };
+}
 
 export interface Job {
-  /** Template PDF bytes; null renders only the variable data (used by the live preview). */
-  template: Uint8Array | null;
-  pages: TemplatePage[];
-  /** Template pages emitted for every record, in order. */
-  pageIndices: number[];
+  /** Background files; null renders only the variable data (used by the live preview). */
+  sources: JobSource[] | null;
+  /** Pages emitted for every record, in order. */
+  pages: JobPage[];
   fields: Field[];
   fonts: FontAsset[];
   data: DataSet | null;
@@ -85,9 +107,9 @@ export async function inspectTemplate(bytes: Uint8Array): Promise<TemplatePage[]
 }
 
 /**
- * Builds the variable data PDF. Every template page is embedded once as a Form
- * XObject and referenced by all output pages, so the output grows only by the
- * per-record text/barcode operators, not by a copy of the template per page.
+ * Builds the variable data PDF. Every background (PDF page or image) is embedded
+ * once and referenced by all output pages, so the output grows only by the
+ * per-record text/barcode operators, not by a copy of the backgrounds per page.
  */
 export async function generate(job: Job): Promise<JobResult> {
   const doc = await PDFDocument.create();
@@ -97,39 +119,49 @@ export async function generate(job: Job): Promise<JobResult> {
   const barcodes = new BarcodeRenderer();
   const warnings: string[] = [];
 
-  const templatePages = job.template ? embedTemplatePages(doc, await loadTemplate(job.template), job.pageIndices) : null;
+  const backgrounds = job.sources ? await embedBackgrounds(doc, job.sources, job.pages, warnings) : null;
 
-  const compiled = job.fields.map((f) => {
+  const bySlot = new Map<string, Array<{ field: Field; resolve: (rec: number) => string }>>();
+  for (const f of job.fields) {
+    let resolve;
     try {
-      return { field: f, resolve: compileContent(f.content, f.counter, job.data) };
+      resolve = compileContent(f.content, f.counter, job.data);
     } catch (e) {
       throw new Error(`Zona "${f.name}": ${e instanceof Error ? e.message : e}`);
     }
-  });
+    bySlot.set(f.slot, [...(bySlot.get(f.slot) ?? []), { field: f, resolve }]);
+  }
   const total = job.to - job.from + 1;
 
   for (let rec = job.from; rec <= job.to; rec++) {
-    for (const pageIndex of job.pageIndices) {
-      const tp = job.pages[pageIndex];
+    for (const jp of job.pages) {
+      const tp = jp.geometry;
       const page = doc.addPage();
-      let viewMatrix: Matrix;
-      if (templatePages) {
+      let viewMatrix: Matrix = [1, 0, 0, 1, 0, 0];
+      const bg = backgrounds?.get(`${jp.sourceId}:${jp.page}`);
+      if (!bg) {
+        page.setMediaBox(0, 0, tp.viewWidth, tp.viewHeight);
+      } else if (jp.image) {
+        page.setMediaBox(0, 0, tp.viewWidth, tp.viewHeight);
+        page.pushOperators(
+          pushGraphicsState(),
+          ...(jp.image.clip ? [rectangle(0, 0, tp.viewWidth, tp.viewHeight), clip(), endPath()] : []),
+          concatTransformationMatrix(...jp.image.matrix),
+          drawObject(page.node.newXObject('Velina', bg.ref)),
+          popGraphicsState(),
+        );
+      } else {
         const [l, b, r, t] = tp.mediaBox;
         page.setMediaBox(l, b, r - l, t - b);
         for (const [name, box] of Object.entries(tp.boxes)) page.node.set(PDFName.of(name), doc.context.obj(box));
         page.setRotation(degrees(tp.rotate));
-        const tpl = templatePages.get(pageIndex)!;
-        if (tpl.group) page.node.set(PDFName.of('Group'), tpl.group);
-        page.pushOperators(drawObject(page.node.newXObject('Velina', tpl.ref)));
+        if (bg.group) page.node.set(PDFName.of('Group'), bg.group);
+        page.pushOperators(drawObject(page.node.newXObject('Velina', bg.ref)));
         const [vl, vb, vr, vt] = tp.view;
         viewMatrix = rotationMatrix(tp.rotate, vr - vl, vt - vb, vl, vb);
-      } else {
-        page.setMediaBox(0, 0, tp.viewWidth, tp.viewHeight);
-        viewMatrix = [1, 0, 0, 1, 0, 0];
       }
       page.pushOperators(pushGraphicsState(), concatTransformationMatrix(...viewMatrix));
-      for (const { field, resolve } of compiled) {
-        if (field.page !== pageIndex) continue;
+      for (const { field, resolve } of bySlot.get(jp.slot) ?? []) {
         try {
           const text = resolve(rec);
           const overflow = await drawField(page, field, text, tp.viewHeight, fonts, barcodes);
@@ -156,6 +188,37 @@ export async function generate(job: Job): Promise<JobResult> {
   return { bytes, pageCount: doc.getPageCount(), warnings };
 }
 
+interface Background {
+  ref: PDFRef;
+  group?: PDFObject;
+}
+
+/**
+ * Embeds each background once, keyed "sourceId:page": PDF pages as Form XObjects
+ * (one copier per source, so resources shared by its pages are copied once),
+ * images as Image XObjects. Only the pages used by the job are embedded.
+ */
+async function embedBackgrounds(doc: PDFDocument, sources: JobSource[], pages: JobPage[], warnings: string[]): Promise<Map<string, Background>> {
+  const used = new Map<string, Set<number>>();
+  for (const p of pages) used.set(p.sourceId, (used.get(p.sourceId) ?? new Set()).add(p.page));
+  const result = new Map<string, Background>();
+  for (const [id, indices] of used) {
+    const src = sources.find((s) => s.id === id);
+    if (!src) throw new Error('Composizione non valida: file della pagina mancante');
+    try {
+      if (src.kind === 'pdf') {
+        for (const [index, bg] of embedTemplatePages(doc, await loadTemplate(src.bytes), [...indices])) result.set(`${id}:${index}`, bg);
+      } else {
+        const ref = await embedRaster(doc, src.bytes, src.kind, (msg) => warnings.push(`File "${src.name}": ${msg}`));
+        result.set(`${id}:0`, { ref });
+      }
+    } catch (e) {
+      throw new Error(`File "${src.name}": ${e instanceof Error ? e.message : e}`);
+    }
+  }
+  return result;
+}
+
 /**
  * Turns template pages into Form XObjects. Unlike pdf-lib's embedPages (which
  * also copies the original content stream, doubling the template size), the
@@ -165,11 +228,12 @@ function embedTemplatePages(
   doc: PDFDocument,
   src: PDFDocument,
   indices: number[],
-): Map<number, { ref: PDFRef; group?: PDFObject }> {
+): Map<number, Background> {
   const copier = PDFObjectCopier.for(src.context, doc.context);
   const srcPages = src.getPages();
-  const result = new Map<number, { ref: PDFRef; group?: PDFObject }>();
+  const result = new Map<number, Background>();
   for (const index of new Set(indices)) {
+    if (!srcPages[index]) throw new Error(`la pagina ${index + 1} non esiste (il PDF ha ${srcPages.length} pagine)`);
     const node = srcPages[index].node;
     const mb = srcPages[index].getMediaBox();
     const resources = node.Resources();
@@ -210,8 +274,6 @@ function embedTemplatePages(
   }
   return result;
 }
-
-type Matrix = [number, number, number, number, number, number];
 
 /**
  * Maps a rotated local space onto a w×h rectangle placed at (ox, oy) in the outer

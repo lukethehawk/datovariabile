@@ -3,6 +3,7 @@ import { openFile, saveProject } from './ui/actions';
 import { initDataPanel } from './ui/data-panel';
 import { $, errorMessage, toast } from './ui/dom';
 import { initOutput } from './ui/output';
+import { initPagesPanel } from './ui/pages-panel';
 import { initProps } from './ui/props';
 import { notify, on, state } from './ui/state';
 import { initViewer } from './ui/viewer';
@@ -26,6 +27,7 @@ function bindFileInput(selector: string): void {
 }
 
 initViewer();
+initPagesPanel();
 initProps();
 initDataPanel();
 initOutput();
@@ -57,11 +59,11 @@ window.addEventListener('drop', (e) => {
 });
 
 const syncToolbar = () => {
-  const ready = Boolean(state.template);
+  const ready = state.slots.length > 0;
   for (const id of ['#add-text', '#add-barcode', '#btn-generate', '#btn-save']) ($(id) as HTMLButtonElement).disabled = !ready;
-  $('#template-name').textContent = state.template?.name ?? '';
+  $('#template-name').textContent = state.sources.map((s) => s.name).join(' + ');
 };
-on(['template'], syncToolbar);
+on(['composition'], syncToolbar);
 syncToolbar();
 
 window.addEventListener('beforeunload', (e) => {

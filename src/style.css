@@ -436,6 +436,173 @@ label.check {
   color: #a8380b;
 }
 
+/* Pagine per record */
+
+#composition > p {
+  margin: 4px 0 8px;
+}
+
+/* Elenco delle pagine del record: righe compatte, scroll oltre ~40vh. */
+#composition ol.slots {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 40vh;
+  overflow: hidden auto;
+}
+
+#composition ol.slots li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: grab;
+  user-select: none;
+}
+
+#composition ol.slots li:active {
+  cursor: grabbing;
+}
+
+#composition ol.slots li:hover {
+  background: #f1f3f5;
+}
+
+#composition ol.slots li.selected {
+  background: #e7f1fb;
+}
+
+/* Pagina esclusa dal PDF: resta modificabile ma attenuata. */
+#composition ol.slots li.off {
+  opacity: 0.55;
+}
+
+/* Trascinamento: linea di inserimento sopra la riga di destinazione. */
+#composition ol.slots li.drop-target {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+#composition canvas.thumb {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 44px;
+  max-height: 44px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+#composition .slot-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+#composition .slot-info strong,
+#composition .slot-info .small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#composition .slot-info strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#composition .slot-actions {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+#composition .slot-actions button.link:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+#composition ol.slots input[type='checkbox'] {
+  margin: 0;
+  cursor: pointer;
+}
+
+#composition .add-page {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+#composition .add-page select {
+  flex: 1;
+  min-width: 0;
+}
+
+#composition fieldset.raster {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px 10px;
+}
+
+#composition fieldset.raster legend {
+  padding: 0 4px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+#composition fieldset.raster p.small {
+  margin: 4px 0 0;
+  line-height: 1.35;
+}
+
+#composition .files-box {
+  margin-top: 2px;
+}
+
+#composition .files-box summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+#composition ul.files {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+#composition ul.files li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+#composition ul.files li:hover {
+  background: #f1f3f5;
+}
+
+#composition ul.files .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------------------------------------------------------------- stage */
 
 .stage {

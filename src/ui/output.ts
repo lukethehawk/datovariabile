@@ -2,7 +2,7 @@ import GenerateWorker from '../worker?worker&inline';
 import type { WorkerMessage, WorkerRequest } from '../worker';
 import { addFont, removeFont } from './actions';
 import { $, download, errorMessage, formatBytes, h, toast } from './dom';
-import { on, parsePages, recordCount, recordRange, state } from './state';
+import { enabledSlots, jobSources, on, recordCount, recordRange, slotPage, state } from './state';
 
 const panel = $('#output-panel');
 const generateBtn = $('#btn-generate') as HTMLButtonElement;
@@ -18,21 +18,12 @@ function render(): void {
     });
     return el;
   };
-  const pages = h('input', { type: 'text', placeholder: 'tutte', value: state.pagesSpec });
-  pages.addEventListener('input', () => {
-    state.pagesSpec = pages.value;
-    renderSummary();
-  });
-  const multiPage = (state.template?.pages.length ?? 0) > 1;
 
   panel.replaceChildren(
     h('div', { class: 'grid2' },
       h('label', { class: 'row' }, h('span', {}, 'Dal record'), rangeInput('rangeFrom', '1')),
       h('label', { class: 'row' }, h('span', {}, 'Al record'), rangeInput('rangeTo', String(n))),
     ),
-    multiPage
-      ? h('label', { class: 'row' }, h('span', {}, 'Pagine della velina per record (es. 1,2)'), pages)
-      : '',
     h('div', { id: 'summary', class: 'muted small' }),
     fontsSection(),
     h('div', { id: 'progress', hidden: true }, h('progress', { max: 1, value: 0 }), h('span', { class: 'small' })),
@@ -43,13 +34,15 @@ function render(): void {
 
 function renderSummary(): void {
   const el = panel.querySelector('#summary');
-  if (!el || !state.template) {
-    if (el) el.textContent = 'Carica una velina PDF per iniziare.';
+  if (!el) return;
+  if (!state.slots.length) {
+    el.textContent = 'Carica una velina (PDF, JPG o PNG) per iniziare.';
     return;
   }
   try {
     const { from, to } = recordRange();
-    const perRecord = parsePages(state.pagesSpec, state.template.pages.length).length;
+    const perRecord = enabledSlots().length;
+    if (!perRecord) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
     const records = to - from + 1;
     el.textContent = `${records} record × ${perRecord} pag. = ${records * perRecord} pagine`;
     el.classList.remove('error');
@@ -83,7 +76,8 @@ function fontsSection(): HTMLElement {
 }
 
 function outputName(): string {
-  const base = state.template?.name.replace(/\.pdf$/i, '') ?? 'output';
+  const first = enabledSlots()[0];
+  const base = first ? state.sources.find((s) => s.id === first.sourceId)!.name.replace(/\.[^.]+$/, '') : 'output';
   return `${base}_dati.pdf`;
 }
 
@@ -95,24 +89,18 @@ async function runGeneration(): Promise<void> {
     toast('Generazione annullata');
     return;
   }
-  const t = state.template;
-  if (!t) return toast('Carica prima una velina PDF', 'error');
+  if (!state.slots.length) return toast('Carica prima una velina (PDF, JPG o PNG)', 'error');
   let request: WorkerRequest;
   try {
     const { from, to } = recordRange();
-    request = {
-      template: t.bytes,
-      pages: t.pages,
-      pageIndices: parsePages(state.pagesSpec, t.pages.length),
-      fields: state.fields,
-      fonts: state.fonts,
-      data: state.data,
-      from,
-      to,
-    };
+    const pages = enabledSlots().map(slotPage);
+    if (!pages.length) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
+    const used = new Set(pages.map((p) => p.slot));
+    request = { sources: jobSources(), pages, fields: state.fields.filter((f) => used.has(f.slot)), fonts: state.fonts, data: state.data, from, to };
   } catch (e) {
     return toast(errorMessage(e), 'error');
   }
+  const sourceBytes = request.sources!.reduce((n, s) => n + s.bytes.length, 0);
 
   const progress = panel.querySelector<HTMLElement>('#progress')!;
   const bar = progress.querySelector('progress')!;
@@ -145,7 +133,7 @@ async function runGeneration(): Promise<void> {
     const seconds = ((performance.now() - started) / 1000).toFixed(1);
     download(msg.bytes, name, 'application/pdf');
     result.replaceChildren(
-      h('p', { class: 'ok' }, `✔ ${name}: ${msg.pageCount} pagine, ${formatBytes(msg.bytes.length)} (velina ${formatBytes(t.bytes.length)}) in ${seconds} s`),
+      h('p', { class: 'ok' }, `✔ ${name}: ${msg.pageCount} pagine, ${formatBytes(msg.bytes.length)} (veline ${formatBytes(sourceBytes)}) in ${seconds} s`),
       h('button', { type: 'button', class: 'btn small', onclick: () => download(msg.bytes, name, 'application/pdf') }, 'Scarica di nuovo'),
       msg.warnings.length
         ? h('details', { class: 'warnings', open: true }, h('summary', {}, `${msg.warnings.length} avvisi`), h('ul', {}, ...msg.warnings.map((w) => h('li', {}, w))))
@@ -168,7 +156,8 @@ function finish(): void {
 }
 
 export function initOutput(): void {
-  on(['template', 'data', 'fonts', 'output'], render);
+  // While a job runs its progress/result elements must stay attached: refresh only the summary.
+  on(['composition', 'data', 'fonts', 'output'], () => (worker ? renderSummary() : render()));
   generateBtn.addEventListener('click', () => void runGeneration());
   render();
 }
