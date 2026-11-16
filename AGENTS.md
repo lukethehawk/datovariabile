@@ -119,7 +119,7 @@ tests/               generate.test.ts (anche multi-PDF), raster.test.ts, project
 
 1. `npm run build` (type-check + build) e `npm test`.
 2. Per modifiche all'interfaccia: aprire `dist/index.html` da `file://` in Chromium, caricare due veline (es. un PDF e un JPG/PNG) e un Excel, aggiungere zone su più pagine, riordinare, generare e controllare il PDF (trucco: ricaricare il PDF generato come velina nell'app e sfogliarne le pagine; oppure contare gli stream grandi con pdf-lib).
-3. Dopo il push controllare il workflow Pages (`gh run list`, `gh run watch`).
+3. Dopo il push controllare il workflow Pages (`gh run list`, `gh run watch <id> --exit-status`) e poi il sito pubblicato (aprire l'URL con `?v=<timestamp>` per evitare la cache): caricamento senza errori in console, più veline, generazione, salva/riapri progetto. Il push su `main` pubblica subito: farlo solo con conferma dell'utente.
 
 ## Backlog noto
 
@@ -129,4 +129,4 @@ tests/               generate.test.ts (anche multi-PDF), raster.test.ts, project
 - Miniature/anteprima di immagini enormi: pdf.js decodifica l'immagine intera a ogni render.
 - QR più veloci: encoder dedicato (es. `qrcode-generator`) per `qrcode`, bwip-js per il resto.
 - Annulla/ripeti nell'editor: non presente.
-- Workflow: le action `checkout`/`setup-node`/`upload-pages-artifact`/`deploy-pages` v4 danno avviso di deprecazione Node 20 (funzionano).
+- Workflow: le action `checkout`/`setup-node`/`upload-pages-artifact`/`deploy-pages` v4 danno avviso di deprecazione Node 20 (funzionano); `ubuntu-latest` passerà a Ubuntu 26 dal 19/10/2026 (avviso del runner).

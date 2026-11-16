@@ -12,11 +12,13 @@ Ogni pagina di velina e ogni immagine viene inclusa **una sola volta** come ogge
 
 Le immagini non vengono ricompresse: i JPEG entrano nel PDF con i dati originali, i PNG senza perdita (la trasparenza è conservata). Il file cresce solo per il testo e i codici di ogni record:
 
-| Esempio (misurato) | Dimensione |
-| --- | --- |
-| Velina | 375 KB |
-| 1000 pagine con un testo variabile | 619 KB (≈ 250 byte per pagina) |
-| 1000 pagine con QR Code | 1,1 MB (≈ 800 byte per pagina) |
+| Esempio (misurato) | Veline | PDF generato |
+| --- | --- | --- |
+| 1000 pagine con un testo variabile | 1 PDF, 375 KB | 619 KB (≈ 250 byte per pagina) |
+| 1000 pagine con QR Code | 1 PDF, 375 KB | 1,1 MB (≈ 800 byte per pagina) |
+| 1000 record fronte/retro (2000 pagine) | 2 PDF, 874 KB | 1,4 MB |
+| 1000 pagine su foto JPEG A4 a 300 dpi | 1 JPEG, 749 KB | 1,0 MB |
+| 1000 record PDF + JPEG + PNG trasparente (3000 pagine) | 3 file, 3,7 MB | 3,7 MB |
 
 I font standard (Helvetica, Times, Courier) non vengono incorporati; un font TTF/OTF caricato viene incorporato una volta sola e ridotto ai soli caratteri usati. Testi e codici a barre sono vettoriali.
 
@@ -29,8 +31,8 @@ I font standard (Helvetica, Times, Courier) non vengono incorporati; un font TTF
    - `{#}` → contatore, con inizio, passo e cifre (zeri iniziali) configurabili.
 
    Esempio: `Biglietto N. {#} - {Nome} {Cognome}`.
-4. **Anteprima**: la pagina mostra il risultato reale del record scelto (frecce ◀ ▶ o clic su una riga della tabella dati).
-5. **Crea PDF**: tutti i record oppure un intervallo (utile per le ristampe: il contatore resta quello del record originale). Senza file dati imposti quanti record generare (es. numerazione 1–500).
+4. **Anteprima**: la pagina mostra il risultato reale del record scelto (frecce ◀ ▶ o clic su una riga della tabella dati). Con più pagine per record scegli la pagina da modificare nel pannello **Pagine per record** o nel menu sopra l'anteprima.
+5. **Crea PDF**: tutti i record oppure un intervallo (utile per le ristampe: il contatore resta quello del record originale). Senza file dati imposti quanti record generare (predefinito 1; es. 500 per una numerazione 1–500).
 
 ### Pagine per record
 
@@ -65,7 +67,7 @@ Senza dati e senza zone, con **Record da generare** impostato a 1 (predefinito),
 
 Trascinando i file sulla finestra: PDF/JPG/PNG = velina, Excel/CSV/TXT = dati, TTF/OTF = font, `.json` = progetto.
 
-**Salva progetto** crea un file `.dvp.json` con zone, tutti i file velina, l'ordine delle pagine, le impostazioni delle immagini e i font: la prossima volta lo riapri e carichi solo i nuovi dati. I progetti salvati con la versione precedente si aprono ancora: vengono convertiti in automatico.
+**Salva progetto** crea un file `.dvp.json` con zone, tutti i file velina, l'ordine delle pagine, le impostazioni delle immagini e i font: la prossima volta lo riapri e carichi solo i nuovi dati. I dati non vengono salvati nel progetto: finché non li ricarichi, l'anteprima segnala le colonne mancanti. I progetti salvati con la versione precedente si aprono ancora: vengono convertiti in automatico.
 
 ### Profili colore
 
@@ -76,6 +78,7 @@ Le immagini RGB con un profilo ICC lo conservano nel PDF. Per le immagini CMYK e
 - **Testo**: font, corpo, interlinea, allineamento orizzontale e verticale, a capo automatico, riduzione automatica del corpo se il testo non entra (altrimenti un avviso indica i record in cui il testo esce dalla zona).
 - **Codici**: QR Code (con livello di correzione), DataMatrix, Aztec, PDF417, Code 128, GS1-128, EAN-13, EAN-8, UPC-A, Code 39, Interleaved 2 of 5, ITF-14; testo leggibile sotto i codici lineari.
 - **Comuni**: colore CMYK (predefinito 100% K) o RGB, rotazione 0/90/180/270°, margine interno, **fondo bianco** ("bianco carta" sotto il codice su sfondi colorati).
+- **Pagina**: sposta la zona su un'altra pagina del record, oppure **Copia su…** per crearne una copia nella stessa posizione su un'altra pagina.
 - Frecce della tastiera: sposta di 0,5 mm (Maiusc: 5 mm); Canc: elimina la zona.
 
 Se un valore non è stampabile (carattere assente nel font standard, EAN con lettere…) la generazione si ferma indicando record e zona: per alfabeti non latini carica un font TTF/OTF che li contenga.
@@ -91,7 +94,7 @@ Richiede Node.js 24.
 ```sh
 npm ci
 npm run dev      # server di sviluppo
-npm test         # test (generazione PDF, lettura dati)
+npm test         # test (generazione PDF, più veline, immagini JPEG/PNG, progetti, lettura dati)
 npm run build    # dist/index.html, file unico
 ```
 
@@ -99,9 +102,9 @@ A ogni push su `main` GitHub Actions esegue test e build e pubblica su GitHub Pa
 
 Struttura:
 
-- `src/core/`: logica senza interfaccia (lettura dati, segnaposto, impaginazione testo, codici a barre vettoriali, generazione PDF con pdf-lib);
-- `src/ui/`: interfaccia (anteprima con pdf.js, editor delle zone, pannelli);
-- `src/worker.ts`: la generazione gira in un Web Worker, l'interfaccia resta reattiva e si può annullare.
+- `src/core/`: logica senza interfaccia: generazione PDF con pdf-lib (`generate.ts`), composizione delle pagine (`composition.ts`), immagini JPEG/PNG senza perdita (`raster.ts`), formato progetto e conversione dei vecchi progetti (`project.ts`), lettura dati, segnaposto, impaginazione testo, codici a barre vettoriali;
+- `src/ui/`: interfaccia (anteprima con pdf.js, pannello delle pagine, editor delle zone, pannelli);
+- `src/worker.ts`: la generazione gira in un Web Worker, l'interfaccia resta reattiva e si può annullare; lo stesso worker prepara l'anteprima delle pagine immagine.
 
 SheetJS è incluso in `vendor/` perché la versione aggiornata non è pubblicata sul registro npm.
 

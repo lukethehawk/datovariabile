@@ -192,3 +192,9 @@ Anteprima senza profili ICC; JPEG 12 bit/lossless/aritmetici rifiutati; decodifi
 ### Miglioramenti futuri
 
 Anteprima ICC con pdf.js patchato o asset accanto all'HTML (rompe il single-file: da valutare); copia degli OutputIntents; misurare la deduplicazione fra PDF su veline reali; rendering dell'anteprima immagine a risoluzione ridotta; imposizione (backlog precedente).
+
+### Pubblicazione
+
+- Push di `c167051` su `main` confermato dall'utente; workflow "Pubblica su GitHub Pages" (run 43880669034) riuscito: build e deploy. Avvisi non bloccanti: action v4 su Node 20 deprecato, `ubuntu-latest` → Ubuntu 26 dal 19/10/2026.
+- Verifica del sito pubblicato in Chromium: nuovo pannello presente, nessun errore in console; fronte.pdf + retro.pdf + JPG + PNG con CSV di 50 righe, zone su tre pagine, riordino → 200 pagine, 1,53 MB (veline 1,45 MB) in 0,6 s; salvataggio e riapertura del progetto con pagine, ordine e zone. Dopo la riapertura l'anteprima segnala la colonna mancante perché i dati non sono nel progetto (comportamento voluto, ora spiegato nel README).
+- Documentazione: README con tabella di misure estesa a fronte/retro, JPEG e composizione mista, scelta della pagina in anteprima, "Copia su…", dati non salvati nel progetto, struttura dei nuovi moduli; AGENTS.md con la procedura di verifica dopo il deploy.
