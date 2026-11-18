@@ -8,7 +8,7 @@ const utf8 = (s: string) => new TextEncoder().encode(s);
 const bytesOf = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
 
 function projectWith(data: SavedData | null): ProjectData {
-  return { sources: [], slots: [], fields: [], fonts: [], manualCount: 1, data, range: { from: '', to: '' } };
+  return { sources: [], slots: [], fields: [], fonts: [], manualCount: 1, data, range: { from: '', to: '' }, generators: [] };
 }
 
 /** SavedData as the app builds it from imported cells, without touching a real file. */

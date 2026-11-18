@@ -7,7 +7,7 @@
 import type { RawTable } from './data';
 import { inspectTemplate } from './generate';
 import { newId } from './composition';
-import type { Field, FontAsset, Slot, SourceFile, SourceKind } from './types';
+import type { DataGenerator, Field, FontAsset, Slot, SourceFile, SourceKind } from './types';
 
 /** The data file of a project and how it was read. */
 export interface SavedData {
@@ -30,6 +30,8 @@ export interface ProjectData {
   data: SavedData | null;
   /** Record range as typed in the output panel (1-based, empty = all). */
   range: { from: string; to: string };
+  /** Data generators ({@Nome}); legacy files have none. */
+  generators: DataGenerator[];
 }
 
 export interface OpenedProject {
@@ -71,7 +73,7 @@ export async function parseProject(json: string): Promise<OpenedProject> {
   }
   if (raw?.app !== 'DatoVariabile') throw new Error('Il file non è un progetto DatoVariabile');
   if (raw.version === 1) return { ...(await migrateV1(raw as ProjectFileV1)), legacy: true };
-  if (raw.version === 3) throw new Error('Questo è il manifest di un archivio .dvp.zip: apri l’archivio ZIP, non il file estratto');
+  if (raw.version === 3 || raw.version === 4) throw new Error('Questo è il manifest di un archivio .dvp.zip: apri l’archivio ZIP, non il file estratto');
   if (raw.version !== 2) throw new Error(`Progetto in un formato più recente (versione ${raw.version}): aggiorna DatoVariabile`);
   const p = raw as ProjectFileV2;
   const sources = p.sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, bytes: fromBase64(s.data) }));
@@ -88,6 +90,7 @@ export async function parseProject(json: string): Promise<OpenedProject> {
       manualCount: p.manualCount,
       data: null,
       range: NO_RANGE,
+      generators: [],
     },
     warnings,
     legacy: true,
@@ -103,7 +106,7 @@ async function migrateV1(p: ProjectFileV1): Promise<{ project: ProjectData; warn
   const warnings: string[] = [];
   const fonts = p.fonts.map((f) => ({ name: f.name, bytes: fromBase64(f.data) }));
   if (!p.template) {
-    return { project: { sources: [], slots: [], fields: [], fonts, manualCount: p.manualCount, data: null, range: NO_RANGE }, warnings: p.fields.length ? ['Il progetto non contiene la velina: zone non recuperabili'] : [] };
+    return { project: { sources: [], slots: [], fields: [], fonts, manualCount: p.manualCount, data: null, range: NO_RANGE, generators: [] }, warnings: p.fields.length ? ['Il progetto non contiene la velina: zone non recuperabili'] : [] };
   }
   const bytes = fromBase64(p.template.data);
   const pageCount = (await inspectTemplate(bytes)).length;
@@ -132,7 +135,7 @@ async function migrateV1(p: ProjectFileV1): Promise<{ project: ProjectData; warn
     // Deep copies: counter and colour objects must not be shared between the copies.
     targets.forEach((slot, i) => fields.push({ ...structuredClone(rest), id: i === 0 ? old.id : newId('f'), slot: slot.id } as Field));
   }
-  return { project: { sources: [source], slots, fields, fonts, manualCount: p.manualCount, data: null, range: NO_RANGE }, warnings };
+  return { project: { sources: [source], slots, fields, fonts, manualCount: p.manualCount, data: null, range: NO_RANGE, generators: [] }, warnings };
 }
 
 /** Parses "1,3-4" into 0-based page indices; empty means all pages (version 1 "pagesSpec"). */

@@ -13,11 +13,13 @@ import { SYMBOLOGIES } from './barcode';
 import { crc32Async } from './crc32';
 import { MAX_PROJECT_CELLS, parseProjectCsv, readTable, toDataSet, writeProjectCsv } from './data';
 import { STANDARD_FONTS } from './fonts';
+import { generatorProblem, nameProblem } from './generators';
 import { parseProject, type OpenedProject, type ProjectData, type SavedData } from './project';
-import type { Field, RasterLayout, Slot, SourceKind } from './types';
+import type { DataGenerator, Field, RasterLayout, Slot, SourceKind } from './types';
 import { isSafePath, isZip, openZip, writeZip, ZipError, type ZipArchive, type ZipInput } from './zip';
 
-export const FORMAT_VERSION = 3;
+/** Version written; version 3 (no generators) is still read. */
+export const FORMAT_VERSION = 4;
 export const MANIFEST = 'progetto.json';
 export const TABLE_PATH = 'dati/dati-usati.csv';
 const README_PATH = 'LEGGIMI.txt';
@@ -30,9 +32,9 @@ export interface FileRef {
   crc32: number;
 }
 
-export interface ManifestV3 {
+export interface ProjectManifest {
   app: 'DatoVariabile';
-  version: 3;
+  version: 4;
   /** ISO date of the save, informative. */
   savedAt: string;
   sources: Array<{ id: string; name: string; kind: SourceKind; file: FileRef }>;
@@ -54,6 +56,8 @@ export interface ManifestV3 {
     /** Effective column names used by the {Colonna} placeholders. */
     columns: string[];
   };
+  /** Data generators ({@Nome}); version 3 manifests have none. See docs/FORMATO_PROGETTO.md §8. */
+  generators: DataGenerator[];
 }
 
 const README = `DatoVariabile - progetto salvato
@@ -68,7 +72,8 @@ dati/dati-usati.csv   i dati effettivamente usati: UTF-8, separatore ";", prima 
 font/                 i font caricati
 
 ATTENZIONE: l'archivio contiene i dati importati (nomi, indirizzi, codici...).
-Condividilo solo con chi è autorizzato a vederli.
+Condividilo solo con chi è autorizzato a vederli. Se usa codici univoci (gift card, ticket),
+contiene anche la chiave da cui si ricavano tutti i codici: trattalo come un documento riservato.
 
 Se apri dati-usati.csv con Excel, Excel può modificare alcuni valori (es. 001234 diventa 1234).
 Non risalvarlo da Excel dentro l'archivio. Se modifichi il CSV e ricrei lo ZIP,
@@ -95,6 +100,12 @@ const STORED = /\.(pdf|jpe?g|png|xlsx|xlsm|xlsb|ods|zip)$/i;
 /** Builds the .dvp.zip of a project. `warnings` reports values that could not be stored exactly. */
 export async function writeProjectArchive(p: ProjectData, when = new Date()): Promise<{ blob: Blob; warnings: string[] }> {
   const warnings: string[] = [];
+  // Same checks as on opening: never write a project that would then be refused.
+  try {
+    checkGenerators(p.generators);
+  } catch (e) {
+    throw new Error(`Correggi il generatore prima di salvare: ${e instanceof Error ? e.message.replace(/^generatore /, '') : e}`);
+  }
   const inputs: ZipInput[] = [];
   const add = async (path: string, data: Uint8Array): Promise<FileRef> => {
     const crc = await crc32Async(data);
@@ -104,15 +115,15 @@ export async function writeProjectArchive(p: ProjectData, when = new Date()): Pr
   const width = (n: number) => Math.max(2, String(n).length);
   const prefix = (i: number, n: number) => String(i + 1).padStart(width(n), '0');
 
-  const sources: ManifestV3['sources'] = [];
+  const sources: ProjectManifest['sources'] = [];
   for (const [i, s] of p.sources.entries()) {
     sources.push({ id: s.id, name: s.name, kind: s.kind, file: await add(`veline/${prefix(i, p.sources.length)}-${safeName(s.name)}`, s.bytes) });
   }
-  const fonts: ManifestV3['fonts'] = [];
+  const fonts: ProjectManifest['fonts'] = [];
   for (const [i, f] of p.fonts.entries()) {
     fonts.push({ name: f.name, file: await add(`font/${prefix(i, p.fonts.length)}-${safeName(f.name)}`, f.bytes) });
   }
-  let data: ManifestV3['data'] = null;
+  let data: ProjectManifest['data'] = null;
   if (p.data) {
     const d = p.data;
     const cellCount = d.table.cells.reduce((n, r) => n + r.length, 0);
@@ -131,9 +142,9 @@ export async function writeProjectArchive(p: ProjectData, when = new Date()): Pr
       columns: d.columns,
     };
   }
-  const manifest: ManifestV3 = {
+  const manifest: ProjectManifest = {
     app: 'DatoVariabile',
-    version: 3,
+    version: 4,
     savedAt: when.toISOString(),
     sources,
     slots: p.slots,
@@ -142,6 +153,7 @@ export async function writeProjectArchive(p: ProjectData, when = new Date()): Pr
     manualCount: p.manualCount,
     range: p.range,
     data,
+    generators: p.generators,
   };
   const json = new TextEncoder().encode(JSON.stringify(manifest, null, 2));
   if (json.length > MAX_MANIFEST) throw new Error('Progetto troppo grande: le impostazioni superano 4 MB');
@@ -205,7 +217,7 @@ async function readProjectArchive(bytes: Uint8Array): Promise<OpenedProject> {
   }
 }
 
-async function loadResources(m: ManifestV3, zip: ZipArchive): Promise<OpenedProject> {
+async function loadResources(m: ProjectManifest, zip: ZipArchive): Promise<OpenedProject> {
   const warnings: string[] = [];
   const read = async (ref: FileRef) => {
     const data = await zip.read(ref.path);
@@ -249,7 +261,7 @@ async function loadResources(m: ManifestV3, zip: ZipArchive): Promise<OpenedProj
     data = { name: d.name, original, table: { sheets: d.sheets, sheet: d.sheet, cells, headerGuess: d.headerGuess }, header: d.header, columns };
   }
   return {
-    project: { sources, slots: m.slots, fields: m.fields, fonts, manualCount: m.manualCount, data, range: m.range },
+    project: { sources, slots: m.slots, fields: m.fields, fonts, manualCount: m.manualCount, data, range: m.range, generators: m.generators },
     warnings,
     legacy: false,
   };
@@ -263,14 +275,15 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isStrArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr);
 
 /** Structural validation: every reference must resolve, inside the archive, exactly once. */
-function checkManifest(raw: unknown, zip: ZipArchive): ManifestV3 {
+function checkManifest(raw: unknown, zip: ZipArchive): ProjectManifest {
   if (!isObj(raw) || raw.app !== 'DatoVariabile') throw new Error('progetto.json non appartiene a DatoVariabile');
-  if (raw.version !== FORMAT_VERSION) {
+  if (raw.version !== 3 && raw.version !== FORMAT_VERSION) {
     if (isNum(raw.version) && raw.version > FORMAT_VERSION) {
       throw new Error(`Progetto in un formato più recente (versione ${raw.version}): aggiorna DatoVariabile`);
     }
     throw new Error(`versione del progetto non valida (${String(raw.version)})`);
   }
+  const generators = raw.version === 3 ? [] : checkGenerators(raw.generators);
   const used = new Set<string>();
   /** `editable`: the data CSV may have been changed by the user (checked later against its CRC). */
   const ref = (v: unknown, what: string, editable = false): FileRef => {
@@ -316,7 +329,7 @@ function checkManifest(raw: unknown, zip: ZipArchive): ManifestV3 {
   if (!isNum(raw.manualCount) || raw.manualCount < 0) throw new Error('numero di record non valido');
   if (!isObj(raw.range) || !isStr(raw.range.from) || !isStr(raw.range.to)) throw new Error('intervallo di record non valido');
 
-  let data: ManifestV3['data'] = null;
+  let data: ProjectManifest['data'] = null;
   if (raw.data !== null) {
     const d = raw.data;
     if (!isObj(d) || !isStr(d.name) || !isStrArray(d.sheets) || !isStr(d.sheet) || typeof d.header !== 'boolean' || typeof d.headerGuess !== 'boolean' || !isStrArray(d.columns)) {
@@ -337,7 +350,7 @@ function checkManifest(raw: unknown, zip: ZipArchive): ManifestV3 {
   }
   return {
     app: 'DatoVariabile',
-    version: 3,
+    version: 4,
     savedAt: isStr(raw.savedAt) ? raw.savedAt : '',
     sources,
     slots,
@@ -346,6 +359,7 @@ function checkManifest(raw: unknown, zip: ZipArchive): ManifestV3 {
     manualCount: raw.manualCount,
     range: { from: raw.range.from, to: raw.range.to },
     data,
+    generators,
   };
 }
 
@@ -359,6 +373,22 @@ function checkRaster(r: unknown, i: number): asserts r is RasterLayout {
     ['contain', 'cover', 'stretch'].includes(r.fit as string) &&
     (r.dpi === null || (isNum(r.dpi) && r.dpi > 0));
   if (!ok) throw new Error(`impostazioni della pagina immagine ${i + 1} non valide`);
+}
+
+/** Generators of a version 4 manifest: well-formed, unique ids and names, able to produce values. */
+function checkGenerators(v: unknown): DataGenerator[] {
+  if (!Array.isArray(v)) throw new Error('elenco dei generatori mancante');
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  return v.map((g, i) => {
+    if (!isObj(g) || !isStr(g.id) || !isStr(g.name) || !['numbering', 'unique', 'datetime'].includes(g.type as string)) throw new Error(`generatore ${i + 1} non valido`);
+    const problem = nameProblem(g.name) ?? generatorProblem(g as unknown as DataGenerator);
+    if (problem) throw new Error(`generatore "${g.name}": ${problem}`);
+    if (ids.has(g.id) || names.has(g.name.toLowerCase())) throw new Error(`generatore duplicato: ${g.name}`);
+    ids.add(g.id);
+    names.add(g.name.toLowerCase());
+    return g as unknown as DataGenerator;
+  });
 }
 
 /**

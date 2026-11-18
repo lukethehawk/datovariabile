@@ -59,6 +59,7 @@ describe('project files', () => {
       manualCount: 3,
       data: null,
       range: { from: '', to: '' },
+      generators: [],
     });
     await expect(parseProject('{"app":"DatoVariabile","version":9}')).rejects.toThrow('formato più recente');
     await expect(parseProject('{"app":"Altro"}')).rejects.toThrow('non è un progetto');

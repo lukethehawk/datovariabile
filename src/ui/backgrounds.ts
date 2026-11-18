@@ -63,6 +63,8 @@ export async function withSlotPage<T>(slot: Slot, use: (page: PDFPageProxy) => P
       fields: [],
       fonts: [],
       data: null,
+      generators: [],
+      now: 0,
       from: 0,
       to: 0,
     }).then(openPdf);

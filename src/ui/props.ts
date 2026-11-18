@@ -185,6 +185,7 @@ function columnPicker(f: Field, target: HTMLTextAreaElement | HTMLInputElement):
     { class: 'chips' },
     ...cols.map((c) => h('button', { type: 'button', class: 'chip', title: `Inserisci {${c}}`, onclick: () => insert(`{${c}}`) }, c)),
     h('button', { type: 'button', class: 'chip counter', title: 'Inserisci il contatore {#}', onclick: () => insert('{#}') }, '# contatore'),
+    ...state.generators.map((g) => h('button', { type: 'button', class: 'chip generator', title: `Inserisci il generatore {@${g.name}}`, onclick: () => insert(`{@${g.name}}`) }, `@${g.name}`)),
   );
 }
 
@@ -237,7 +238,7 @@ function renderProps(): void {
     h('fieldset', {}, h('legend', {}, 'Contenuto'),
       content,
       columnPicker(f, content),
-      h('p', { class: 'muted small' }, 'Testo fisso e segnaposto: {Colonna} per i dati, {#} per il contatore. Esempio: N. {#} - {Nome} {Cognome}'),
+      h('p', { class: 'muted small' }, 'Testo fisso e segnaposto: {Colonna} per i dati, {#} per il contatore della zona, {@Nome} per un generatore di dati. Esempio: N. {#} - {Nome} {Cognome}'),
     ),
     h('fieldset', {}, h('legend', {}, 'Contatore {#}'),
       h('div', { class: 'grid3' },
@@ -319,7 +320,7 @@ const clampPct = (v: number) => Math.min(100, Math.max(0, v));
 
 export function initProps(): void {
   on(['fields', 'selection', 'composition'], renderList);
-  on(['selection', 'fonts', 'data', 'composition'], renderProps);
+  on(['selection', 'fonts', 'data', 'composition', 'generators'], renderProps);
   on(['fields', 'geometry'], () => syncers.forEach((s) => s()));
   const add = (type: Field['type']) => {
     const slot = currentSlot();

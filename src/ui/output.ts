@@ -1,8 +1,24 @@
 import GenerateWorker from '../worker?worker&inline';
 import type { WorkerMessage, WorkerRequest } from '../worker';
 import { addFont, removeFont } from './actions';
+import { generatorProblem, referencedGenerators, uniqueMaxRecords } from '../core/generators';
+import type { Field } from '../core/types';
 import { $, download, errorMessage, formatBytes, h, toast } from './dom';
 import { enabledSlots, jobSources, on, recordCount, recordRange, slotPage, state } from './state';
+
+/** Problem of a generator used by the fields, checked before generating `count` records (absolute). */
+function generatorIssue(fields: Field[], count: number): string | null {
+  const used = new Set(fields.flatMap((f) => referencedGenerators(f.content).map((n) => n.toLowerCase())));
+  for (const g of state.generators) {
+    if (!used.has(g.name.toLowerCase())) continue;
+    const problem = generatorProblem(g);
+    if (problem) return `Generatore "${g.name}": ${problem}`;
+    if (g.type === 'unique' && count > uniqueMaxRecords(g)) {
+      return `Generatore "${g.name}": servono ${count} codici ma con ${g.length} caratteri se ne possono usare al massimo ${uniqueMaxRecords(g)}: aumenta la lunghezza`;
+    }
+  }
+  return null;
+}
 
 const panel = $('#output-panel');
 const generateBtn = $('#btn-generate') as HTMLButtonElement;
@@ -43,6 +59,8 @@ function renderSummary(): void {
     const { from, to } = recordRange();
     const perRecord = enabledSlots().length;
     if (!perRecord) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
+    const issue = generatorIssue(state.fields, to + 1);
+    if (issue) throw new Error(issue);
     const records = to - from + 1;
     el.textContent = `${records} record × ${perRecord} pag. = ${records * perRecord} pagine`;
     el.classList.remove('error');
@@ -96,7 +114,11 @@ async function runGeneration(): Promise<void> {
     const pages = enabledSlots().map(slotPage);
     if (!pages.length) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
     const used = new Set(pages.map((p) => p.slot));
-    request = { sources: jobSources(), pages, fields: state.fields.filter((f) => used.has(f.slot)), fonts: state.fonts, data: state.data, from, to };
+    const fields = state.fields.filter((f) => used.has(f.slot));
+    const issue = generatorIssue(fields, to + 1);
+    if (issue) throw new Error(issue);
+    // The instant of "date of generation" generators: taken once, here, for the whole PDF.
+    request = { sources: jobSources(), pages, fields, fonts: state.fonts, data: state.data, generators: state.generators, now: Date.now(), from, to };
   } catch (e) {
     return toast(errorMessage(e), 'error');
   }
@@ -158,6 +180,7 @@ function finish(): void {
 export function initOutput(): void {
   // While a job runs its progress/result elements must stay attached: refresh only the summary.
   on(['composition', 'data', 'fonts', 'output'], () => (worker ? renderSummary() : render()));
+  on(['generators', 'fields'], renderSummary);
   generateBtn.addEventListener('click', () => void runGeneration());
   render();
 }

@@ -32,7 +32,7 @@ export async function pdfJob(sources: Uint8Array[], pages: Array<[number, number
   const jobSources: JobSource[] = sources.map((bytes, i) => ({ id: `src${i}`, name: `file${i}.pdf`, kind: 'pdf', bytes }));
   const geometry = await Promise.all(sources.map((b) => inspectTemplate(b)));
   const jobPages: JobPage[] = pages.map(([s, p, slot]) => ({ slot, sourceId: `src${s}`, page: p, geometry: geometry[s][p] }));
-  return { sources: jobSources, pages: jobPages, fields: [], fonts: [], data: null, from: 0, to: 0, ...overrides };
+  return { sources: jobSources, pages: jobPages, fields: [], fonts: [], data: null, generators: [], now: 0, from: 0, to: 0, ...overrides };
 }
 
 export function textField(overrides: Partial<TextField> = {}): TextField {

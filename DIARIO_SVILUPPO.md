@@ -270,3 +270,65 @@ Progetto apribile fino a 512 MiB (letto in memoria); niente ZIP64; 5 milioni di 
 ### Miglioramenti futuri
 
 Salvataggio/apertura in un worker se compaiono progetti molto grandi; lettura dello ZIP da `File` a blocchi invece che intero in memoria; eventuale scelta "salva senza dati" se l'utente la chiederà.
+
+---
+
+## 2026-11-18: Generatori di dati senza database (numerazione, codici univoci, data/ora)
+
+### Obiettivo
+
+Creare 1.000 etichette con matricole, 5.000 ticket con codici univoci o 500 etichette con la data senza preparare un Excel, con valori riproducibili nelle ristampe. Tre generatori in un'unica architettura; `{#}` invariato; funziona con e senza database; persistenza nel `.dvp.zip`. Fuori ambito: formule, condizioni, imposizione, immagini variabili, export dei codici.
+
+### Analisi iniziale
+
+- `placeholders.ts`: un solo token speciale `{#}` (contatore della zona, `start + indiceAssoluto·step`), ogni altro `{X}` è una colonna (errore se assente); i nomi colonna accettano qualunque carattere tranne `{}`.
+- `generate.ts` compila ogni zona una volta e risolve per indice assoluto; anteprima (thread UI, un record) e PDF (worker) costruiscono `Job` separati.
+- Manifest `.dvp.zip` v3 validato in modo stretto: un campo nuovo in v3 verrebbe ignorato da un'app vecchia e perso al risalvataggio.
+- Verificato da `file://` in Chromium: `isSecureContext`, `crypto.getRandomValues`, `crypto.subtle` disponibili; `Intl.formatToParts` con `Europe/Rome` identico in Chromium e Node 24.
+
+### Council (council-opus = claude-opus-5-5 high, council-sol = gpt-6.1-sol high)
+
+Due analisi indipendenti, un giro di revisione incrociata e un secondo giro mirato (consentito perché restava una divergenza sulla sicurezza dei codici). Sintesi permanente in `docs/FORMATO_PROGETTO.md` §9.
+
+- **Proposte iniziali.** Opus: `{@Nome}` con errore di ambiguità e riscrittura alla rinomina; codici univoci con permutazione Feistel su dominio k^L e HMAC-SHA-256 scritto in casa (nessuno stato); manifest v4 solo se ci sono generatori; date con `Intl.formatToParts`; conferma esplicita alla modifica di una serie. Sol: `{{gen:ID}}` con nuovo tokenizer, escaping e migrazione del significato di `{{…}}`; codici casuali CSPRNG salvati come elenco nel progetto (`generatori/ID.txt`); manifest sempre v4; tzdb incorporata e versionata; blocco della serie e "Crea nuova serie".
+- **Dopo la revisione incrociata.** Sol ritira la tzdb (si fermerebbe alla versione del rilascio) e accetta i preset di numerazione di Opus; Opus accetta "sempre v4" e il blocco dell'eliminazione; sulla modifica della serie si sono scambiati posizione (scelta: conferma con codici prima/dopo + "Nuova serie"). Restavano due divergenze.
+- **Sintassi** — deciso `{@Nome}`: `{{…}}` cambierebbe il significato di contenuti esistenti (oggi `{{Nome}}` stampa graffe attorno al valore) e richiederebbe migrazione; `{@Nome}` si legge nel campo testo e il conflitto con una colonna `@Nome` diventa un errore esplicito. Sol l'ha accettata come compromesso.
+- **Codici univoci** — sintesi del coordinatore, accettata da entrambi al secondo giro: l'elenco di Sol non è riproducibile se si aggiungono record senza risalvare; la Feistel di Opus è crittografia inventata (e con lunghezza 1 degenera in una traslazione, come ha mostrato Sol). Soluzione: **elenco deterministico da seme**, HMAC-SHA-256 in modalità contatore → rejection sampling → scarto dei duplicati; il record i è l'i-esimo codice distinto. Nessuno stato oltre alla chiave, stabilità per prefisso, nessuna costruzione crittografica nuova. Precisazioni recepite: alfabeto e lunghezza nel messaggio HMAC (separazione di dominio), specifica byte per byte e vettori golden, limite al 50 % della capacità, codici sempre generati da 0, HMAC da `@noble/hashes` (audit pubblici) con versione esatta.
+
+### Architettura implementata
+
+- `src/core/types.ts`: `NumberingGenerator`, `UniqueGenerator`, `DateTimeGenerator` (`DataGenerator`), tutti con `id`, `name`, `prefix`, `suffix`.
+- `src/core/generators.ts`: `compileGenerators()` restituisce un `GeneratorSet` per job (compilazione pigra: un codice univoco costa solo se usato); `numberingBody()` (base biiettiva come le colonne di Excel, controllo di ogni intermedio come intero sicuro); `uniqueCodes()` con cache incrementale dei flussi (fino a 8 serie) così l'anteprima non ricalcola; `civilTime()`/`formatParts()` per le date; `generatorProblem()`/`nameProblem()` come unico validatore per pannello, salvataggio e apertura.
+- `src/core/placeholders.ts`: `{#}` → `{@Nome}` → `{Colonna}`; `generatorToken()` e la stessa regex sono usati da compilazione, ricerca dei riferimenti e rinomina (un solo parser).
+- `src/core/generate.ts`: `Job.generators` e `Job.now`; il `GeneratorSet` è condiviso da tutte le zone del job.
+- `src/core/archive.ts`: manifest **versione 4** (`generators`), legge la 3; validazione completa in apertura **e** in salvataggio; LEGGIMI avvisa che il progetto contiene la chiave.
+- Interfaccia: pannello "Generatori di dati" (`src/ui/generators-panel.ts`, colonna destra) con esempi, uso nelle zone, capacità e probabilità di indovinare un codice, conferme; chip verdi `@Nome` nel pannello zona; riepilogo di "Crea PDF" che blocca prima della generazione se un codice univoco non ha abbastanza combinazioni; `Job.now` preso al clic su "Crea PDF"; anteprima con istante di esempio fisso per la sessione (`state.previewNow`) ed etichetta esplicita.
+- Nuova dipendenza: `@noble/hashes` 2.4.0 (sha256 + hmac, zero dipendenze, MIT), unica eccezione motivata alla regola "niente dipendenze" perché si tratta di crittografia.
+
+### Revisione indipendente (GPT-6.1 Sol High, subagente `council-sol`; Advisor ancora disattivato)
+
+Corretti: (alta) perdita di precisione nella numerazione "lettere + numero" con passi enormi → controllo di ogni intermedio; (alta) progetto con generatore non valido salvabile ma non riapribile → stesso validatore in salvataggio; (media) parser diversi fra compilazione e rinomina/riferimenti (`{ @Codice }`) → token condiviso; (media) alfabeti con emoji accettati ma indicizzati per unità UTF-16 → rifiutati; (media) fuso mancante interpretato come fuso del dispositivo → errore; (bassa) anni 0–99 → date fissate limitate a 1000–9999; cache fredda non verificata → `clearUniqueCache()` e test dedicato. Lasciato come limite documentato: la prima anteprima su un record molto alto calcola i codici fino a quel record nel thread UI (misurato 0,2 s per 100.000 codici; poi in cache).
+
+### Test e prove
+
+- `tests/generators.test.ts` e `tests/generators-integration.test.ts` (scritti da subagenti TASK e ricontrollati): sequenze numeriche, alfabetiche (Z→AA, ZZ→AAA), A001→A999→B001, passi, prefissi, intervalli parziali, errori di esaurimento e di precisione; codici univoci senza duplicati su 100.000, stabilità per prefisso e a cache fredda, separazione di dominio, capacità insufficiente, **vettori golden verificati indipendentemente con `crypto.subtle`**; date in tutti i formati, ora legale, mezzanotte, UTC/New York, modalità fissata; stesso codice su fronte, retro e QR; ristampe parziali; database + generatori; ambiguità con colonne `@X`; archivio v4/v3/v5, generatori malformati in apertura e in salvataggio.
+- Chromium da `file://`: fronte + retro, 1.000 record senza dati, numerazione A001…, codice univoco, data; zone con i chip; PDF da 2.000 pagine (1,18 MB, 4,2 s) con 1.000 codici distinti, A001…A999, B001; salvataggio (3,6 KB), riapertura con esempi identici, ristampa 100–110 con testi identici alle pagine corrispondenti della tiratura completa.
+- Firefox 159 da `file://` (playwright-core temporaneo fuori dal repo): CSV + numerazione + codice univoco, salva, riapri (esempi identici), genera.
+
+### Prestazioni (Node 24)
+
+| Prova | Tempo |
+| --- | ---: |
+| 10.000 codici univoci (8 caratteri, 31 simboli) | 33 ms |
+| 100.000 codici univoci | 201 ms |
+| 1.000 seriali A001… | 2 ms |
+| 10.000 codici univoci + PDF da 10.000 pagine (test integrazione) | 6,1 s |
+| Fronte/retro 5.000 record con database, numerazione, codice e QR (10.000 pagine, 5,5 MB) | 27,5 s (dominato dai QR, ~4 ms l'uno) |
+
+### Limiti conosciuti
+
+Unicità solo dentro una serie (non fra generatori o progetti); chi ha il progetto ha la chiave e quindi tutti i codici; codici facili da indovinare se le combinazioni sono poche (avviso nel pannello); al massimo metà delle combinazioni; la data "alla generazione" in una ristampa è quella della ristampa; i progetti con generatori richiedono questa versione dell'app; prima anteprima su un record alto ricalcola i codici fino a lì.
+
+### Miglioramenti futuri
+
+Anteprima in un worker persistente se servono serie oltre il milione; export dei codici in CSV (fuori ambito ora); opzione "riusa la data della prima generazione" per le ristampe, se richiesta.

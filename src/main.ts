@@ -2,6 +2,7 @@ import './style.css';
 import { openFile, saveProject } from './ui/actions';
 import { initDataPanel } from './ui/data-panel';
 import { $, errorMessage, toast } from './ui/dom';
+import { initGeneratorsPanel } from './ui/generators-panel';
 import { initOutput } from './ui/output';
 import { initPagesPanel } from './ui/pages-panel';
 import { initProps } from './ui/props';
@@ -31,6 +32,7 @@ initPagesPanel();
 initProps();
 initDataPanel();
 initOutput();
+initGeneratorsPanel();
 
 bindFileInput('#in-template');
 bindFileInput('#in-data');

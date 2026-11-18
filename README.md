@@ -28,7 +28,8 @@ I font standard (Helvetica, Times, Courier) non vengono incorporati; un font TTF
 2. **Dati** (facoltativo): `.xlsx`, `.xls`, `.ods`, `.csv`, `.txt`. Il separatore (`;` `,` tab `|`) e la codifica (UTF-8 o Windows-1252 di Excel) sono riconosciuti in automatico. Un `.txt` senza separatori è letto come un valore per riga. I valori di Excel appaiono come formattati nel foglio; le date in formato breve diventano `gg/mm/aaaa`.
 3. **Zone**: "＋ Testo" o "＋ Codice / QR", poi trascina e ridimensiona sulla pagina. Nel contenuto scrivi testo fisso e segnaposto:
    - `{Nome colonna}` → valore della colonna per quel record (clicca i nomi delle colonne per inserirli);
-   - `{#}` → contatore, con inizio, passo e cifre (zeri iniziali) configurabili.
+   - `{#}` → contatore, con inizio, passo e cifre (zeri iniziali) configurabili;
+   - `{@Nome}` → valore di un generatore di dati (vedi [Generatori di dati](#generatori-di-dati-senza-excel)).
 
    Esempio: `Biglietto N. {#} - {Nome} {Cognome}`.
 4. **Anteprima**: la pagina mostra il risultato reale del record scelto (frecce ◀ ▶ o clic su una riga della tabella dati). Con più pagine per record scegli la pagina da modificare nel pannello **Pagine per record** o nel menu sopra l'anteprima.
@@ -67,7 +68,7 @@ Senza dati e senza zone, con **Record da generare** impostato a 1 (predefinito),
 
 Trascinando i file sulla finestra: PDF/JPG/PNG = velina, Excel/CSV/TXT = dati, TTF/OTF = font, `.dvp.zip`/`.json` = progetto.
 
-**Salva progetto** crea un unico file `NomeProgetto.dvp.zip` (il nome del progetto aperto, altrimenti quello della prima velina) con: le veline originali (PDF, JPG o PNG, non modificate e ognuna una sola volta), il file dati originale (Excel, CSV o TXT), una copia dei dati usati, i font caricati e tutte le impostazioni, cioè pagine e loro ordine, impostazioni delle immagini, zone, contatori, intervallo di record e numero di record senza dati. Riaprendolo con **Apri progetto** ritrovi tutto com'era al salvataggio, compreso il foglio Excel scelto e l'indicazione delle intestazioni: non serve ricaricare i dati.
+**Salva progetto** crea un unico file `NomeProgetto.dvp.zip` (il nome del progetto aperto, altrimenti quello della prima velina) con: le veline originali (PDF, JPG o PNG, non modificate e ognuna una sola volta), il file dati originale (Excel, CSV o TXT), una copia dei dati usati, i font caricati, i generatori di dati (compresa la chiave dei codici univoci) e tutte le impostazioni, cioè pagine e loro ordine, impostazioni delle immagini, zone, contatori, intervallo di record e numero di record senza dati. Riaprendolo con **Apri progetto** ritrovi tutto com'era al salvataggio, compreso il foglio Excel scelto e l'indicazione delle intestazioni: non serve ricaricare i dati.
 
 ### Cosa c'è nel file .dvp.zip
 
@@ -100,6 +101,37 @@ Le immagini RGB con un profilo ICC lo conservano nel PDF. Per le immagini CMYK e
 - Frecce della tastiera: sposta di 0,5 mm (Maiusc: 5 mm); Canc: elimina la zona.
 
 Se un valore non è stampabile (carattere assente nel font standard, EAN con lettere…) la generazione si ferma indicando record e zona: per alfabeti non latini carica un font TTF/OTF che li contenga.
+
+### Generatori di dati (senza Excel)
+
+Numeri progressivi, codici univoci e date si possono creare anche senza un file di dati, dal pannello **Generatori di dati** nella colonna destra: scegli **＋ Nuovo generatore…** e poi **Numerazione**, **Codice univoco** o **Data/Ora**. Dagli un nome (per esempio `Matricola`): nell'editor della zona compare un pulsante verde `@Matricola` che inserisce il segnaposto `{@Matricola}` (puoi anche scriverlo a mano).
+
+- Un generatore produce **un solo valore per record**, identico in tutte le zone che lo usano — testo, QR, codice a barre, fronte e retro.
+- Funzionano con o senza file dati; con i dati il numero di record è quello del file, senza dati lo imposti tu.
+- `{#}` resta il contatore della singola zona, come prima: è indipendente dai generatori.
+
+**Numerazione.** Tre tipi, con prefisso e suffisso comuni:
+
+- **Numerica**: inizio, passo e cifre con zeri iniziali. Con prefisso `FT-` e 6 cifre ottieni `FT-000001`, `FT-000002`…
+- **Alfabetica**: `A, B … Z, AA, AB…`; scegli la prima lettera e il passo. Dopo l'ultima lettera puoi far aggiungere una lettera (`Z` → `AA`) oppure fermarti con un errore. L'alfabeto è modificabile.
+- **Lettere + numero**: `A001 … A999, B001…`; imposti lettera iniziale, numero iniziale, numero da/a e cifre. Con prefisso `PROD-`, numero da 1 a 9999 e 4 cifre ottieni `PROD-A0001`, `PROD-A0002`…
+
+**Codice univoco.** Scegli i caratteri tra lettere e numeri senza ambigui (`0`/`O`, `1`/`I`/`L`), lettere e numeri, solo numeri, solo lettere, solo lettere senza ambigui; imposti la lunghezza e, se vuoi, prefisso e suffisso (es. `GIFT-2026-` più 6 caratteri).
+
+- I codici non si ripetono nella stessa serie.
+- Restano gli stessi in anteprima, nel PDF, dopo salvataggio e riapertura e nelle ristampe parziali: il record 100 ha sempre lo stesso codice. Aggiungere record in fondo non cambia i codici già assegnati.
+- Si può usare al massimo metà delle combinazioni possibili: se i record sono troppi, l'app chiede di aumentare la lunghezza. Il pannello mostra quante combinazioni esistono e quanto è facile indovinare un codice a caso.
+- Cambiare caratteri o lunghezza cambia tutti i codici: se il generatore è già usato nelle zone, viene chiesta conferma. **Nuova serie** crea codici completamente nuovi.
+- Non c'è garanzia di unicità tra generatori o progetti diversi.
+- Il file di progetto contiene la chiave da cui si ricavano i codici: trattalo come riservato, perché chi ha il progetto può ricostruire tutti i codici.
+
+**Data/Ora.** Formati: `18/11/2026`, `18-11-2026`, `18/11/26`, `18/11/2026 14:35`, `14:35`, `2026-11-18`, `2026-11-18 14:35`. Puoi usare la data **del momento in cui si crea il PDF**: viene presa una volta all'avvio della creazione e resta uguale su tutte le pagine; in anteprima vedi un'ora di esempio (aggiornabile con **Aggiorna ora di esempio**), quindi una ristampa successiva avrà la nuova data. Oppure scegli **fissata nel progetto**: resta uguale anche dopo salvataggio e riapertura. Il fuso orario predefinito è `Europe/Rome`.
+
+Qualche esempio:
+
+- 1000 etichette con matricola `FT-000001`: Numerazione con prefisso `FT-` e 6 cifre, inserita come `{@Matricola}`.
+- 5000 ticket: Codice univoco sul fronte e lo stesso `{@Codice}` dentro un QR sul retro.
+- 500 etichette "Prodotto il …": Data/Ora del momento di creazione nel testo `Prodotto il {@Data}`.
 
 ## Uso offline
 
@@ -135,6 +167,8 @@ Per chi sviluppa (anche agenti AI): [AGENTS.md](AGENTS.md) contiene la memoria d
 - I PDF velina non devono essere protetti da password.
 - JPEG: solo 8 bit standard o progressivi (non 12 bit, lossless o aritmetici).
 - I PNG molto grandi con trasparenza o interlacciati (oltre ~400 MB di pixel non compressi) non sono elaborabili nel browser.
+- Un generatore con lo stesso nome di una colonna dei dati che inizia con `@` (per esempio generatore `Codice` e colonna `@Codice`) blocca la generazione finché non rinomini il generatore.
+- I progetti salvati con i generatori richiedono questa versione dell'app.
 - L'anteprima non applica i profili colore ICC; il PDF finale sì.
 - Immagini animate: viene usato solo il primo fotogramma.
 - Nessuna conversione o ottimizzazione automatica delle immagini: vengono inserite come sono.

@@ -44,7 +44,8 @@ src/core/            logica pura, nessun DOM (gira anche nel worker e in Node)
   project.ts         ProjectData/SavedData, parseProject() per i vecchi .dvp.json v1/v2 (migrazione v1), parsePages() (solo v1)
   barcode.ts         SYMBOLOGIES, BarcodeRenderer.place(), drawing context bwip-js → operatori PDF
   text.ts            layoutText(): a capo, riduzione corpo (ricerca binaria), allineamenti
-  placeholders.ts    compileContent(): {Colonna} e {#}; formatCounter()
+  placeholders.ts    compileContent(): {#} contatore della zona, {@Nome} generatore, {Colonna}; formatCounter(), referencedColumns()
+  generators.ts      generatori di dati: compileGenerators() (GeneratorSet per job), numberingBody(), uniqueCodes() (hmac-sha256-ctr-v1), formatDateTime(), generatorProblem()/nameProblem(), renameInContent()
   data.ts            readTable() (xlsx/csv/txt), toDataSet(), detectDelimiter(), parseDelimited(), decodeText(), writeProjectCsv()/parseProjectCsv() (CSV del progetto)
   fonts.ts           STANDARD_FONTS, FontCache (embed una volta per documento)
 src/ui/              interfaccia DOM vanilla
@@ -52,6 +53,7 @@ src/ui/              interfaccia DOM vanilla
   actions.ts         addSource()/removeSource() (dedup per byte), dati, font, openPdf() pdf.js, salva/apri progetto
   pages-panel.ts     pannello "Pagine per record": slot con miniature, riordino (trascina/↑↓), duplica, escludi, elimina, aggiungi pagina, impostazioni pagina immagine
   backgrounds.ts     slotPdfPage(): sfondo di uno slot come pagina pdf.js (immagini: PDF di 1 pagina fatto da generate(), cache per layout)
+  generators-panel.ts pannello "Generatori di dati" (colonna destra): crea/configura/rinomina/elimina, esempi, capacità dei codici
   viewer.ts          canvas velina + canvas overlay + riquadri zone (drag/resize/tastiera), zoom
   props.ts           elenco zone e pannello proprietà
   data-panel.ts      tabella dati, foglio, intestazioni, conteggio manuale
@@ -59,9 +61,9 @@ src/ui/              interfaccia DOM vanilla
   dom.ts             h() builder, toast, download, formatBytes
 src/worker.ts        Web Worker: riceve Job, chiama generate(), invia progress/done/error
 src/main.ts          bootstrap, drag&drop file, stato toolbar
-tests/               generate.test.ts (anche multi-PDF), raster.test.ts, project.test.ts (v1/v2), archive.test.ts, zip.test.ts, csv.test.ts, data.test.ts,
+tests/               generate.test.ts (anche multi-PDF), raster.test.ts, project.test.ts (v1/v2), archive.test.ts, zip.test.ts, csv.test.ts, data.test.ts, generators.test.ts (vettori golden), generators-integration.test.ts,
                      helpers.ts (makePdf, pdfJob, textField, barcodeField), images.ts (flatJpeg, encodePng, decodePredicted)
-docs/FORMATO_PROGETTO.md   specifica del formato .dvp.zip v3 (leggere prima di toccare il salvataggio)
+docs/FORMATO_PROGETTO.md   specifica del formato .dvp.zip v4 e dei generatori (leggere prima di toccare salvataggio o generatori)
 .github/workflows/pages.yml   test + build + deploy Pages
 ```
 
@@ -87,12 +89,16 @@ docs/FORMATO_PROGETTO.md   specifica del formato .dvp.zip v3 (leggere prima di t
    - Mai `embedJpg`/`embedPng` di pdf-lib (16→8 bit, palette espanse, ICC ignorato, `Decode` CMYK sempre invertito, `DataView` senza byteOffset).
    - Colore (scelta dell'utente): profilo ICC RGB → `ICCBased` (N 3, Alternate DeviceRGB; per PNG lo stream zlib di iCCP è riusato com'è); profili grigio/CMYK **ignorati** (DeviceGray/DeviceCMYK, avviso "valori di stampa conservati") per non trasformare il K100 in quadricromia sul RIP. Nessun `/Group` di trasparenza aggiunto alle pagine.
    - Nessun ricampionamento, nessuna conversione automatica, nessun ritaglio/deformazione senza scelta esplicita (`fit` cover/stretch).
-10. **Progetto autosufficiente** (`archive.ts`, specifica in `docs/FORMATO_PROGETTO.md`). "Salva progetto" scrive solo `.dvp.zip` v3; "Apri progetto" legge v3 e i vecchi `.dvp.json` v1/v2.
+10. **Progetto autosufficiente** (`archive.ts`, specifica in `docs/FORMATO_PROGETTO.md`). "Salva progetto" scrive solo `.dvp.zip` v4; "Apri progetto" legge v4, v3 e i vecchi `.dvp.json` v1/v2.
    - I file originali (veline, dati, font) vanno nell'archivio **byte per byte**, una volta sola; nessun base64.
    - Autorevole all'apertura: `progetto.json` + `dati/dati-usati.csv` (celle importate, riga d'intestazione inclusa) + `data.columns` del manifest. **Il file dati originale non si rianalizza mai all'apertura** (serve solo a cambiare foglio): un aggiornamento di SheetJS o dell'euristica del separatore non deve cambiare i valori salvati.
    - CSV del progetto: UTF-8 con BOM, `;`, CRLF, virgolette solo se servono, righe non rettangolarizzate, letto con `parseProjectCsv()` (mai con `readTable`/`detectDelimiter`: con una colonna romperebbe le celle quotate).
    - Apertura **tutto-o-niente**, e dati/intervallo del lavoro precedente non sopravvivono mai a un'apertura (anche dei vecchi JSON, che non contenevano dati).
    - L'archivio è input non attendibile: validare tutto in `openZip()`/`checkManifest()` prima di estrarre; ogni limite controllato in apertura deve essere rispettabile in salvataggio.
+11. **Generatori di dati** (`generators.ts`, specifica in `docs/FORMATO_PROGETTO.md` §8). Un valore per record, funzione pura di impostazioni + indice **assoluto** del record (+ `Job.now` per le date "alla generazione"); un solo `GeneratorSet` per job, così testo, QR, barcode, fronte e retro ricevono lo stesso valore. Nessuna casualità durante la risoluzione: l'unica è la chiave creata con il generatore (`crypto.getRandomValues`).
+   - `{#}` resta il contatore **della zona** (non è un generatore). `{@Nome}` = generatore (nome case-insensitive); senza generatore con quel nome si cerca la colonna "@Nome" (compatibilità); generatore e colonna insieme → errore. Rinominare riscrive i segnaposto.
+   - Codici univoci `hmac-sha256-ctr-v1` **congelato**: HMAC-SHA-256 (`@noble/hashes`, versione esatta 2.4.0) in modalità contatore, rejection sampling, scarto dei duplicati; record i = i-esimo codice distinto, quindi si generano sempre i codici 0…i (mai solo l'intervallo). Persistita solo la chiave. Limite: record ≤ 50 % delle combinazioni. Qualsiasi modifica all'algoritmo richiede un nuovo valore di `algorithm`; i vettori golden in `tests/generators.test.ts` non vanno mai aggiornati per farli passare.
+   - `Job.now` si prende **una volta** in `runGeneration` (output.ts); l'anteprima usa `state.previewNow` (fisso per la sessione, aggiornabile dal pannello). Date con `Intl.formatToParts` e separatori composti dall'app; data fissata = ora civile senza fuso.
 
 ## Dettagli tecnici da sapere
 
@@ -112,8 +118,9 @@ docs/FORMATO_PROGETTO.md   specifica del formato .dvp.zip v3 (leggere prima di t
 - **Pagine immagine** (`rasterPage()`): `RasterLayout = {size: 'image'|'A3'|'A4'|'A5'|'custom', width, height (pt, custom), orientation: auto|portrait|landscape, fit: contain|cover|stretch, dpi|null}`. Geometria: MediaBox `[0,0,W,H]`, `rotate 0`, view = MediaBox; l'orientamento EXIF (1–8, solo JPEG) è nella matrice immagine, non nel `/Rotate`. `size:'image'` = dimensione da DPI (`layout.dpi` o quelli del file). Predefinito (`defaultLayout`): `image` se il file dichiara ≥ 150 dpi in unità fisiche (JFIF/EXIF/pHYs), altrimenti A4 `contain` con orientamento dell'immagine. Il layout è **per slot**: la stessa immagine può stare su A4 e A5 senza essere incorporata due volte.
 - **Limiti raster**: decodifica rifiutata oltre 400 MB di campioni (`MAX_DECODED_BYTES`); il pass-through non ha limiti oltre al file. APNG: solo l'immagine predefinita (IDAT).
 - **Anteprima e ICC**: pdf.js è aperto senza `wasmUrl`/`useWorkerFetch` → i profili ICC non sono applicati in anteprima (fallback all'Alternate); `wasmUrl` è un *prefisso* condiviso con openjpeg/jbig2 e letto con XHR sincrona, quindi un solo data URL nel single-file non basta. Limite documentato, il PDF finale contiene i profili.
-- **Formato progetto**: v3 = `.dvp.zip` (vedi invariante 10 e `docs/FORMATO_PROGETTO.md`): `progetto.json` (`sources[{id,name,kind,file:{path,size,crc32}}]`, `slots`, `fields`, `fonts`, `manualCount`, `range {from,to}`, `data` null o `{name, original, table{…,rows,width}, sheets, sheet, header, headerGuess, columns}`), `LEGGIMI.txt`, `veline/NN-nome`, `dati/originale-nome`, `dati/dati-usati.csv`, `font/NN-nome`. STORE per pdf/jpg/png/xlsx/ods, DEFLATE (`CompressionStream('deflate-raw')`) per il resto. Limiti `ZIP_LIMITS`: archivio 512 MiB, 1000 voci, voce 512 MiB, totale 1 GiB, espansione ≤ max(1 MiB, 1000×), manifest 4 MiB. CSV modificato fuori dall'app (CRC diverso dal manifest) → usato con avviso e colonne ricalcolate. Versioni precedenti (`project.ts`): v2 `.dvp.json` (sorgenti/font in base64, nessun dato), v1 (`template` + `pagesSpec` + `Field.page`, migrata: `pagesSpec` → slot, zona copiata per ogni occorrenza, pagine escluse con zone → slot disabilitati). Versione > 3 → "formato più recente". Se cambi `Slot`/`Field`/layout/manifest, incrementa la versione con migrazione e aggiorna la specifica.
+- **Formato progetto**: v4 = `.dvp.zip` (vedi invariante 10 e `docs/FORMATO_PROGETTO.md`): `progetto.json` (`sources[{id,name,kind,file:{path,size,crc32}}]`, `slots`, `fields`, `fonts`, `manualCount`, `range {from,to}`, `data` null o `{name, original, table{…,rows,width}, sheets, sheet, header, headerGuess, columns}`, `generators`), `LEGGIMI.txt`, `veline/NN-nome`, `dati/originale-nome`, `dati/dati-usati.csv`, `font/NN-nome`. STORE per pdf/jpg/png/xlsx/ods, DEFLATE (`CompressionStream('deflate-raw')`) per il resto. Limiti `ZIP_LIMITS`: archivio 512 MiB, 1000 voci, voce 512 MiB, totale 1 GiB, espansione ≤ max(1 MiB, 1000×), manifest 4 MiB. CSV modificato fuori dall'app (CRC diverso dal manifest) → usato con avviso e colonne ricalcolate. Versioni precedenti (`project.ts`): v3 `.dvp.zip` senza generatori, v2 `.dvp.json` (sorgenti/font in base64, nessun dato), v1 (`template` + `pagesSpec` + `Field.page`, migrata: `pagesSpec` → slot, zona copiata per ogni occorrenza, pagine escluse con zone → slot disabilitati). Versione > 4 → "formato più recente". Se cambi `Slot`/`Field`/layout/manifest/generatori, incrementa la versione con migrazione e aggiorna la specifica.
 - **Nome del progetto**: `state.projectName` = nome del file aperto (senza `.dvp.zip`/`.dvp.json`), riproposto al salvataggio; altrimenti il nome della prima velina.
+- **Manifest versione 4** = versione 3 + `generators` (scritta sempre; la 3 si legge con `generators: []`). Validazione con `generatorProblem()`/`nameProblem()` prima di applicare il progetto.
 - **Record count**: con dati = righe; senza dati = `state.manualCount` (predefinito **1**: lavori di sola numerazione o PDF da immagini).
 - **Worker**: la richiesta contiene solo i file usati da slot abilitati (`jobSources()`), clonati (structured clone); l'output è trasferito.
 

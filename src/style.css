@@ -603,6 +603,101 @@ label.check {
   white-space: nowrap;
 }
 
+/* Generatori di dati */
+
+/* Il pannello vive nella colonna destra: niente scroll orizzontale. */
+#generators-panel {
+  min-width: 0;
+}
+
+#generators-panel p.hint {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+/* Una scheda per generatore: stesso look dei fieldset delle proprietà. */
+#generators-panel details.gen {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0 0 6px;
+  padding: 6px 8px 8px;
+  min-width: 0;
+}
+
+#generators-panel details.gen summary {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+#generators-panel details.gen summary strong {
+  font-size: 12px;
+}
+
+/* Le celle delle griglie non devono allargarsi oltre la colonna. */
+#generators-panel details.gen .grid2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+#generators-panel details.gen .grid3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#generators-panel details.gen label.row {
+  min-width: 0;
+}
+
+#generators-panel details.gen input,
+#generators-panel details.gen select {
+  width: 100%;
+  min-width: 0;
+}
+
+#generators-panel details.gen p.small {
+  margin: 4px 0 6px;
+  line-height: 1.35;
+}
+
+#generators-panel details.gen button.btn.small {
+  margin-bottom: 2px;
+}
+
+/* Esempi generati: monospace su fondo leggero, vanno a capo. */
+#generators-panel details.gen p.gen-example code {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 11px;
+  background: #f1f3f5;
+  border-radius: 3px;
+  padding: 1px 4px;
+  overflow-wrap: anywhere;
+}
+
+#generators-panel details.gen button.link.danger {
+  color: var(--danger);
+}
+
+#generators-panel details.gen button.link.danger:hover:not(:disabled) {
+  color: #a11;
+}
+
+#generators-panel details.gen button.link.danger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#generators-panel select {
+  width: 100%;
+}
+
+/* Chip dei generatori: tinta verde, distinta dal contatore arancione. */
+.chip.generator {
+  border-color: #a7d9ba;
+  background: #eefaf2;
+  color: #1c6b38;
+}
+
 /* ---------------------------------------------------------------- stage */
 
 .stage {

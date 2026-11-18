@@ -33,6 +33,7 @@ async function project(overrides: Partial<ProjectData> = {}): Promise<ProjectDat
     manualCount: 12,
     data: null,
     range: { from: '3', to: '9' },
+    generators: [],
     ...overrides,
   };
 }

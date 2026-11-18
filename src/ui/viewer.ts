@@ -84,7 +84,7 @@ async function renderOverlay(): Promise<void> {
   }
   try {
     const record = Math.min(state.record, recordCount() - 1);
-    const { bytes } = await generate({ sources: null, pages: [page], fields, fonts: state.fonts, data: state.data, from: record, to: record });
+    const { bytes } = await generate({ sources: null, pages: [page], fields, fonts: state.fonts, data: state.data, generators: state.generators, now: state.previewNow, from: record, to: record });
     if (seq !== overlaySeq) return;
     const doc = await openPdf(bytes);
     try {
@@ -251,7 +251,7 @@ export function initViewer(): void {
     layout();
     scheduleOverlay();
   });
-  on(['fields', 'data', 'fonts'], () => {
+  on(['fields', 'data', 'fonts', 'generators'], () => {
     renderStageBar();
     drawBoxes();
     scheduleOverlay();

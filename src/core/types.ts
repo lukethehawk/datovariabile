@@ -125,3 +125,66 @@ export interface Slot {
   /** Page setup, raster sources only. */
   raster?: RasterLayout;
 }
+
+// ---------------------------------------------------------------- data generators
+// One value per record (absolute index), shared by every field that writes {@Nome}.
+// Specification of the algorithms: docs/FORMATO_PROGETTO.md §8.
+
+interface GeneratorBase {
+  id: string;
+  /** Name used in contents as {@Nome}: unique (case-insensitive), no braces, no leading/trailing spaces. */
+  name: string;
+  prefix: string;
+  suffix: string;
+}
+
+/** Numerazione. Value index n = start + record × step (like {#}). */
+export interface NumberingGenerator extends GeneratorBase {
+  type: 'numbering';
+  /**
+   * number: n zero padded to `digits` (FT-000001);
+   * letters: n-th letter group in bijective base (A…Z, AA…), n ≥ 1;
+   * lettersNumber: group + number (A001…A999, B001…).
+   */
+  style: 'number' | 'letters' | 'lettersNumber';
+  start: number;
+  step: number;
+  /** Minimum digits of the numeric part (zero padded); lettersNumber: also the width of the range. */
+  digits: number;
+  /** Letters used, in order (default A–Z). */
+  alphabet: string;
+  /** letters / lettersNumber: first letter group (e.g. "A"); start then counts from it. */
+  groupStart: string;
+  /** lettersNumber: range of the numeric part, e.g. 1…999. */
+  numberMin: number;
+  numberMax: number;
+  /** When the groups of the starting length are used up: add a letter (Z→AA) or stop with an error. */
+  overflow: 'grow' | 'error';
+}
+
+/** Codice univoco: i-th distinct code of an HMAC-SHA-256 stream keyed by `key` (no stored list). */
+export interface UniqueGenerator extends GeneratorBase {
+  type: 'unique';
+  algorithm: 'hmac-sha256-ctr-v1';
+  /** 256-bit secret, 64 hex characters, created with crypto.getRandomValues. */
+  key: string;
+  /** Characters of the random part, in order, all distinct (2–64). */
+  alphabet: string;
+  length: number;
+}
+
+/** Data/Ora. */
+export interface DateTimeGenerator extends GeneratorBase {
+  type: 'datetime';
+  /** job: instant taken once when the PDF generation starts; fixed: `fixed` civil date-time. */
+  mode: 'job' | 'fixed';
+  /** IANA time zone used in job mode (default Europe/Rome). */
+  timeZone: string;
+  /** Civil date-time "YYYY-MM-DDTHH:mm", no time zone (fixed mode). */
+  fixed: string;
+  format: DateFormat;
+}
+
+export type DateFormat = 'dd/MM/yyyy' | 'dd-MM-yyyy' | 'dd/MM/yyyy HH:mm' | 'HH:mm' | 'yyyy-MM-dd' | 'yyyy-MM-dd HH:mm' | 'dd/MM/yy';
+
+export type DataGenerator = NumberingGenerator | UniqueGenerator | DateTimeGenerator;

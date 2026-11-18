@@ -13,7 +13,7 @@ async function imageJob(bytes: Uint8Array, kind: SourceKind, overrides: Partial<
   const info = await inspectSource(bytes, kind);
   const slot: Slot = { id: 's1', sourceId: 'img', page: 0, enabled: true };
   if (info.kind !== 'pdf') slot.raster = { ...defaultLayout(info.raster), ...raster };
-  return { sources: [{ id: 'img', name: `img.${kind}`, kind, bytes }], pages: [jobPage(slot, info)], fields: [], fonts: [], data: null, from: 0, to: 0, ...overrides };
+  return { sources: [{ id: 'img', name: `img.${kind}`, kind, bytes }], pages: [jobPage(slot, info)], fields: [], fonts: [], data: null, generators: [], now: 0, from: 0, to: 0, ...overrides };
 }
 
 /** Image XObjects of the output (SMasks included), with their dictionary. */
@@ -339,7 +339,7 @@ describe('mixed composition', () => {
       return jobPage(s, inf);
     });
     const fields = slots.map((s, i) => textField({ id: `t${i}`, slot: s.id, content: `${s.id}{#}`, x: 5, y: 5, w: 40, h: 10, size: 6, valign: 'top' }));
-    const res = await generate({ sources, pages, fields, fonts: [], data: null, from: 0, to: 199 });
+    const res = await generate({ sources, pages, fields, fonts: [], data: null, generators: [], now: 0, from: 0, to: 199 });
 
     expect(res.pageCount).toBe(600);
     const imgs = await images(res.bytes);

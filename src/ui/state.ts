@@ -2,7 +2,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { jobPage, newId, type SourceInfo } from '../core/composition';
 import { toDataSet, type RawTable } from '../core/data';
 import type { JobPage, JobSource } from '../core/generate';
-import type { BarcodeField, DataSet, Field, FontAsset, Slot, SourceFile, TextField } from '../core/types';
+import type { BarcodeField, DataGenerator, DataSet, Field, FontAsset, Slot, SourceFile, TextField } from '../core/types';
 
 export const MM = 72 / 25.4;
 
@@ -44,10 +44,17 @@ export const state = {
   rangeTo: '',
   /** Name of the project file opened last (proposed again when saving). */
   projectName: null as string | null,
+  /** Data generators ({@Nome}). */
+  generators: [] as DataGenerator[],
+  /**
+   * Instant shown by "date of generation" generators in the preview: fixed for the session (refreshed
+   * by the panel button) so the preview does not change while editing; the PDF takes its own instant.
+   */
+  previewNow: Date.now(),
 };
 
-/** composition = sources or slots changed (files, order, page setup). */
-export type Topic = 'composition' | 'data' | 'fields' | 'geometry' | 'selection' | 'view' | 'fonts' | 'output';
+/** composition = sources or slots changed (files, order, page setup); generators = definitions changed. */
+export type Topic = 'composition' | 'data' | 'fields' | 'geometry' | 'selection' | 'view' | 'fonts' | 'output' | 'generators';
 const listeners = new Map<Topic, Set<() => void>>();
 
 export function on(topics: Topic[], fn: () => void): void {

@@ -25,10 +25,11 @@ import {
 } from 'pdf-lib';
 import { BarcodeRenderer } from './barcode';
 import { FontCache } from './fonts';
+import { compileGenerators } from './generators';
 import { compileContent } from './placeholders';
 import { embedRaster } from './raster';
 import { layoutText } from './text';
-import type { Box, ColorSpec, DataSet, Field, FontAsset, Matrix, Rotation, SourceKind, TemplatePage } from './types';
+import type { Box, ColorSpec, DataGenerator, DataSet, Field, FontAsset, Matrix, Rotation, SourceKind, TemplatePage } from './types';
 
 export interface JobSource {
   id: string;
@@ -57,6 +58,10 @@ export interface Job {
   fields: Field[];
   fonts: FontAsset[];
   data: DataSet | null;
+  /** Data generators referenced as {@Nome}; values depend only on the absolute record index (and `now`). */
+  generators: DataGenerator[];
+  /** Instant captured once when the generation starts (ms since epoch): "date of generation" generators. */
+  now: number;
   /** Record range, 0-based, inclusive. */
   from: number;
   to: number;
@@ -121,11 +126,13 @@ export async function generate(job: Job): Promise<JobResult> {
 
   const backgrounds = job.sources ? await embedBackgrounds(doc, job.sources, job.pages, warnings) : null;
 
+  // One set for the whole job: a generator is compiled once and gives the same value to every field.
+  const generators = compileGenerators(job.generators, { now: job.now, count: job.to + 1 });
   const bySlot = new Map<string, Array<{ field: Field; resolve: (rec: number) => string }>>();
   for (const f of job.fields) {
     let resolve;
     try {
-      resolve = compileContent(f.content, f.counter, job.data);
+      resolve = compileContent(f.content, f.counter, job.data, generators);
     } catch (e) {
       throw new Error(`Zona "${f.name}": ${e instanceof Error ? e.message : e}`);
     }

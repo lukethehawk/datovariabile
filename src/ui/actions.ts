@@ -5,6 +5,7 @@ import { inspectSource, jobPage, newId, slotsFor, sourceKind } from '../core/com
 import { readTable, toDataSet } from '../core/data';
 import { STANDARD_FONTS } from '../core/fonts';
 import { readProjectFile, writeProjectArchive } from '../core/archive';
+import { referencedColumns } from '../core/placeholders';
 import { ZIP_LIMITS } from '../core/zip';
 import type { SourceFile } from '../core/types';
 import { download, formatBytes } from './dom';
@@ -148,12 +149,14 @@ export async function saveProject(): Promise<string> {
     manualCount: state.manualCount,
     data: src && state.data ? { name: src.name, original: src.bytes, table: src.table, header: src.header, columns: [...state.data.columns] } : null,
     range: { from: state.rangeFrom, to: state.rangeTo },
+    generators: structuredClone(state.generators),
   };
   const { blob, warnings } = await writeProjectArchive(snapshot);
   const fileName = `${projectBaseName()}.dvp.zip`;
   download(blob, fileName, 'application/zip');
   const privacy = src ? ` · include i dati di ${src.name}: condividilo solo con chi è autorizzato` : '';
-  return [`Progetto salvato: ${fileName} (${formatBytes(blob.size)})${privacy}`, ...warnings].join(' · ');
+  const keys = snapshot.generators.some((g) => g.type === 'unique') ? ' · contiene la chiave dei codici univoci: trattalo come riservato' : '';
+  return [`Progetto salvato: ${fileName} (${formatBytes(blob.size)})${privacy}${keys}`, ...warnings].join(' · ');
 }
 
 /** Opens a .dvp.zip (or a legacy .dvp.json). All or nothing: on error the current job stays as it was. */
@@ -181,6 +184,7 @@ export async function openProject(fileName: string, bytes: Uint8Array): Promise<
   state.fields = project.fields;
   state.fonts = project.fonts;
   state.manualCount = project.manualCount;
+  state.generators = project.generators;
   // Data and range always come from the project: never keep the data of the previous job.
   const d = project.data;
   state.source = d ? { name: d.name, bytes: d.original, table: d.table, header: d.header } : null;
@@ -191,10 +195,10 @@ export async function openProject(fileName: string, bytes: Uint8Array): Promise<
   state.slotId = project.slots.find((s) => s.enabled)?.id ?? project.slots[0]?.id ?? null;
   state.selectedId = null;
   state.projectName = fileName.replace(/\.dvp\.(zip|json)$/i, '').replace(/\.(zip|json)$/i, '');
-  notify('composition', 'fonts', 'fields', 'selection', 'output', 'view', 'data');
+  notify('composition', 'fonts', 'fields', 'selection', 'output', 'view', 'data', 'generators');
   // The new job is in place: failures while releasing the old files must not look like a failed opening.
   await Promise.allSettled(old.map((s) => s.close()));
-  const usesColumns = project.fields.some((f) => /\{(?!#\})[^{}]+\}/.test(f.content));
+  const usesColumns = project.fields.some((f) => referencedColumns(f.content, (n) => project.generators.some((g) => g.name.toLowerCase() === n.toLowerCase())).length > 0);
   if (legacy && usesColumns) warnings.unshift('Progetto in formato precedente: i dati non erano inclusi, carica il file dati e poi salva di nuovo');
   return [`Progetto aperto: ${fileName}`, ...warnings].join(' · ');
 }
