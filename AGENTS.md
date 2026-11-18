@@ -157,6 +157,7 @@ Problemi dell'interfaccia segnalati dalla revisione del 2026-11-18: **risolti e 
 
 Funzionalità e altro:
 
+- **Modificare le misure di una pagina vuota senza perdere le zone** (richiesta dell'utente, 2026-11-18). Oggi le misure si fissano alla creazione. Idea: creare con `blankPagePdf()` il nuovo PDF, aggiungerlo come sorgente e far puntare gli slot esistenti (`slot.sourceId`, `page: 0`) al nuovo file: le zone sono agganciate allo slot e non si perdono. Da decidere: zone che escono dalla nuova pagina (avviso, nessuno spostamento automatico), ancoraggio in alto a sinistra (coordinate attuali) o scala proporzionale, rimozione della vecchia sorgente quando nessuno slot la usa più. Formato `.dvp.zip` invariato.
 - Modulo di imposizione (N pose per foglio, crocini di taglio): non presente.
 - Anteprima con profili ICC (qcms di pdf.js) compatibile col single-file; copia degli `/OutputIntents` delle veline PDF.
 - Deduplicazione di risorse identiche fra PDF diversi (misurare prima su veline reali: guadagno incerto con font subsettati).
