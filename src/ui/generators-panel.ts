@@ -4,6 +4,7 @@ import {
   DEFAULT_LETTERS,
   DEFAULT_TIME_ZONE,
   generatorExamples,
+  generatorProblem,
   nameProblem,
   newUniqueKey,
   referencedGenerators,
@@ -14,22 +15,24 @@ import {
 } from '../core/generators';
 import type { DataGenerator, DateTimeGenerator, NumberingGenerator, UniqueGenerator } from '../core/types';
 import { $, h, toast } from './dom';
+import { setSectionAlert } from './sections';
 import { notify, on, recordCount, state } from './state';
 
 /**
- * "Generatori di dati": numbering, unique codes and date/time without a data file.
+ * "Dati variabili › Generatori": numbering, unique codes and date/time, with or without a data file.
  * Fields use them as {@Nome} (chips in the field panel); one value per record, shared by all fields.
  */
 const panel = $('#generators-panel');
 let openId: string | null = null;
 
 const TYPE_LABEL: Record<DataGenerator['type'], string> = { numbering: 'Numerazione', unique: 'Codice univoco', datetime: 'Data/Ora' };
+/** Short labels: the select must stay readable in a narrow column; the exact characters are in its tooltip. */
 const ALPHABET_LABEL: Array<[keyof typeof UNIQUE_ALPHABETS, string]> = [
-  ['safe', 'Lettere e numeri, senza ambigui (0/O, 1/I/L)'],
-  ['alnum', 'Lettere e numeri'],
-  ['digits', 'Solo numeri'],
+  ['safe', 'Lettere e cifre, senza ambigui'],
+  ['alnum', 'Lettere e cifre'],
+  ['digits', 'Solo cifre'],
   ['letters', 'Solo lettere'],
-  ['safeLetters', 'Solo lettere, senza ambigui (I/L/O)'],
+  ['safeLetters', 'Solo lettere, senza ambigui'],
 ];
 
 function changed(): void {
@@ -122,7 +125,7 @@ function set<G extends DataGenerator>(g: G, patch: Partial<G>): void {
 }
 
 function numberingControls(g: NumberingGenerator): Node[] {
-  const style = choice(g.style, [['number', 'Numerica (FT-000001)'], ['letters', 'Alfabetica (A, B … Z, AA)'], ['lettersNumber', 'Lettere + numero (A001 … A999, B001)']], (v) => {
+  const style = choice(g.style, [['number', 'Numerica (000001)'], ['letters', 'Alfabetica (A … Z, AA)'], ['lettersNumber', 'Lettere + numero (A001)']], (v) => {
     const defaults: Record<NumberingGenerator['style'], Partial<NumberingGenerator>> = {
       number: { digits: 6, start: 1 },
       letters: { groupStart: 'A', overflow: 'grow' },
@@ -161,34 +164,39 @@ function uniqueControls(g: UniqueGenerator): Node[] {
   const alphabet = choice<string>(preset, [...ALPHABET_LABEL, ...(preset === 'custom' ? ([['custom', 'Personalizzati']] as Array<[string, string]>) : [])], (v) =>
     changeSeries({ alphabet: UNIQUE_ALPHABETS[v as keyof typeof UNIQUE_ALPHABETS] }, () => (alphabet.value = preset)),
   );
+  alphabet.title = `Caratteri usati: ${g.alphabet}`;
   const length = int(g.length, (n) => changeSeries({ length: n }, () => (length.value = String(g.length))), 1);
   const capacity = uniqueCapacity(g);
   const records = Math.max(1, recordCount());
   const odds = capacity / records;
   const fmt = (n: number) => (n >= 1e15 ? n.toExponential(1).replace('e+', ' × 10^') : Math.floor(n).toLocaleString('it-IT'));
   const tooMany = records > uniqueMaxRecords(g);
+  const easy = !tooMany && odds < 1e6;
   return [
     row('Caratteri', alphabet),
-    h('div', { class: 'grid2' }, row('Lunghezza', length), h('span')),
+    h('div', { class: 'grid2 align-end' },
+      row('Lunghezza', length),
+      h('button', {
+        type: 'button',
+        class: 'btn small',
+        title: 'Crea una nuova serie di codici (nuova chiave): i codici attuali non saranno più riproducibili',
+        onclick: () => {
+          if (confirm(`Creare una nuova serie per "${g.name}"? Tutti i codici cambieranno e quelli attuali non saranno più riproducibili.`)) set(g, { key: newUniqueKey() });
+        },
+      }, 'Nuova serie'),
+    ),
     h('p', { class: `small ${tooMany ? 'error' : 'muted'}` },
       tooMany
-        ? `Troppi record (${records}): con ${g.length} caratteri se ne possono usare al massimo ${fmt(uniqueMaxRecords(g))}. Aumenta la lunghezza.`
-        : `Combinazioni: ${fmt(capacity)} · con ${records} record, indovinare un codice valido a caso riesce 1 volta su ${fmt(odds)}${odds < 1e6 ? ' (codici facili da indovinare: aumenta la lunghezza se hanno un valore)' : ''}.`,
+        ? `Troppi record (${records}): con ${g.length} caratteri al massimo ${fmt(uniqueMaxRecords(g))}. Aumenta la lunghezza.`
+        : `Combinazioni ${fmt(capacity)} · indovinare un codice a caso: 1 su ${fmt(odds)}`,
     ),
-    h('button', {
-      type: 'button',
-      class: 'btn small',
-      title: 'Crea una nuova serie di codici (nuova chiave): i codici attuali non saranno più riproducibili',
-      onclick: () => {
-        if (confirm(`Creare una nuova serie per "${g.name}"? Tutti i codici cambieranno e quelli attuali non saranno più riproducibili.`)) set(g, { key: newUniqueKey() });
-      },
-    }, 'Nuova serie'),
+    ...(easy ? [h('p', { class: 'small warn' }, 'Codici facili da indovinare: aumenta la lunghezza se hanno un valore.')] : []),
   ];
 }
 
 function dateControls(g: DateTimeGenerator): Node[] {
   const out: Node[] = [
-    row('Data e ora', choice(g.mode, [['job', 'del momento in cui si crea il PDF'], ['fixed', 'fissata nel progetto']], (mode) => set(g, { mode }))),
+    row('Data e ora', choice(g.mode, [['job', 'alla creazione del PDF'], ['fixed', 'fissata nel progetto']], (mode) => set(g, { mode }))),
     row('Formato', choice(g.format, DATE_FORMATS, (format) => set(g, { format }))),
   ];
   if (g.mode === 'fixed') {
@@ -198,36 +206,52 @@ function dateControls(g: DateTimeGenerator): Node[] {
   } else {
     out.push(
       row('Fuso orario', text(g.timeZone, (timeZone) => set(g, { timeZone: timeZone.trim() || DEFAULT_TIME_ZONE }))),
-      h('button', { type: 'button', class: 'btn small', title: 'L’anteprima mostra un’ora di esempio: il PDF userà quella della generazione', onclick: () => ((state.previewNow = Date.now()), changed()) }, 'Aggiorna ora di esempio'),
+      h('p', { class: 'muted small' }, 'L’anteprima usa un’ora di esempio; il PDF userà quella di creazione.'),
+      h('button', { type: 'button', class: 'btn small', onclick: () => ((state.previewNow = Date.now()), changed()) }, 'Aggiorna ora di esempio'),
     );
   }
   return out;
 }
 
+/** Why the generator cannot produce values for the current records, or null. */
+function problemOf(g: DataGenerator): string | null {
+  const problem = generatorProblem(g);
+  if (problem) return problem;
+  if (g.type === 'unique' && recordCount() > uniqueMaxRecords(g)) return `troppi record per ${g.length} ${g.length === 1 ? 'carattere' : 'caratteri'}: aumenta la lunghezza`;
+  return null;
+}
+
 function card(g: DataGenerator): HTMLElement {
   const users = usedBy(g);
-  const examples = generatorExamples(g, 3, state.previewNow);
-  const pending = g.type === 'datetime' && g.mode === 'job';
+  const problem = problemOf(g);
+  const examples = problem ? [] : generatorExamples(g, 3, state.previewNow);
   const name = text(g.name, () => rename(g, name), { title: 'Nome usato nelle zone come {@Nome}' });
   const controls = g.type === 'numbering' ? numberingControls(g) : g.type === 'unique' ? uniqueControls(g) : dateControls(g);
   const details = h(
     'details',
-    { class: 'gen', open: g.id === openId },
+    { class: `gen${problem ? ' has-problem' : ''}`, open: g.id === openId },
     h('summary', {},
-      h('strong', {}, `@${g.name}`),
-      h('span', { class: 'muted small' }, ` ${TYPE_LABEL[g.type]} · ${users.length ? `in ${users.length} ${users.length === 1 ? 'zona' : 'zone'}` : 'non usato'}`),
+      h('span', { class: 'gen-line' },
+        h('strong', { class: 'gen-name' }, `@${g.name}`),
+        h('span', { class: 'gen-type' }, TYPE_LABEL[g.type]),
+        h('span', { class: 'gen-uses muted small' }, users.length ? `in ${users.length} ${users.length === 1 ? 'zona' : 'zone'}` : 'non usato'),
+      ),
+      problem
+        ? h('span', { class: 'gen-sample error small' }, `⚠ ${problem}`)
+        : h('code', { class: 'gen-sample', title: 'Primi valori' }, examples.join(' · ')),
     ),
-    row('Nome', name),
-    ...controls,
-    h('div', { class: 'grid2' }, row('Prefisso', text(g.prefix, (prefix) => set(g, { prefix }))), row('Suffisso', text(g.suffix, (suffix) => set(g, { suffix })))),
-    h('p', { class: 'small gen-example' }, pending ? 'Esempio (ora attuale, il PDF userà quella di creazione): ' : 'Esempi: ', h('code', {}, examples.join(' · '))),
-    h('button', {
-      type: 'button',
-      class: 'link danger',
-      disabled: users.length > 0,
-      title: users.length ? `Usato da: ${users.join(', ')}` : 'Elimina il generatore',
-      onclick: () => remove(g),
-    }, 'Elimina'),
+    h('div', { class: 'gen-body' },
+      row('Nome', name),
+      ...controls,
+      h('div', { class: 'grid2' }, row('Prefisso', text(g.prefix, (prefix) => set(g, { prefix }))), row('Suffisso', text(g.suffix, (suffix) => set(g, { suffix })))),
+      h('button', {
+        type: 'button',
+        class: 'link danger',
+        disabled: users.length > 0,
+        title: users.length ? `Usato da: ${users.join(', ')}. Toglilo dalle zone per eliminarlo.` : 'Elimina il generatore',
+        onclick: () => remove(g),
+      }, users.length ? 'Elimina (in uso)' : 'Elimina'),
+    ),
   );
   details.addEventListener('toggle', () => {
     if (details.open) openId = g.id;
@@ -236,22 +260,36 @@ function card(g: DataGenerator): HTMLElement {
   return details;
 }
 
+const NEW_TYPES: Array<[DataGenerator['type'], string, string]> = [
+  ['numbering', 'Numerazione', 'FT-000001, A001, AA'],
+  ['unique', 'Codice univoco', 'gift card, ticket, QR'],
+  ['datetime', 'Data/Ora', 'di creazione o fissata'],
+];
+
+function addMenu(): HTMLElement {
+  const menu: HTMLDetailsElement = h('details', { class: 'gen-add' },
+    h('summary', { class: 'btn small' }, '＋ Nuovo generatore'),
+    h('div', { class: 'gen-add-list' },
+      ...NEW_TYPES.map(([type, label, hint]) =>
+        h('button', { type: 'button', onclick: () => create(type) }, h('strong', {}, label), h('span', { class: 'muted small' }, hint)),
+      ),
+    ),
+  );
+  menu.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !menu.open) return;
+    menu.open = false;
+    menu.querySelector('summary')!.focus();
+  });
+  return menu;
+}
+
 function render(): void {
-  const add = h(
-    'select',
-    { title: 'Crea un generatore di dati' },
-    h('option', { value: '' }, '＋ Nuovo generatore…'),
-    h('option', { value: 'numbering' }, 'Numerazione (FT-000001, A001, AA)'),
-    h('option', { value: 'unique' }, 'Codice univoco (gift card, ticket)'),
-    h('option', { value: 'datetime' }, 'Data/Ora'),
-  );
-  add.addEventListener('change', () => add.value && create(add.value as DataGenerator['type']));
   panel.replaceChildren(
-    ...(state.generators.length
-      ? state.generators.map(card)
-      : [h('p', { class: 'muted hint' }, 'Numeri, codici univoci e date senza file dati: un valore per record, uguale in tutte le zone che lo usano (anche fronte e retro).')]),
-    add,
+    ...(state.generators.length ? state.generators.map(card) : [h('p', { class: 'muted small' }, 'Nessun generatore.')]),
+    addMenu(),
   );
+  const broken = state.generators.map((g) => [g, problemOf(g)] as const).find(([, p]) => p);
+  setSectionAlert('data', broken ? `generatore "${broken[0].name}": ${broken[1]}` : null);
 }
 
 export function initGeneratorsPanel(): void {

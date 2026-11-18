@@ -25,15 +25,15 @@ I font standard (Helvetica, Times, Courier) non vengono incorporati; un font TTF
 ## Come si usa
 
 1. **Velina**: uno o più file PDF, JPG o PNG da ripetere per ogni record. Ogni file caricato aggiunge le sue pagine in fondo alla composizione, che gestisci nel pannello **Pagine per record** (colonna sinistra). Dei PDF vengono conservati TrimBox, BleedBox e rotazione.
-2. **Dati** (facoltativo): `.xlsx`, `.xls`, `.ods`, `.csv`, `.txt`. Il separatore (`;` `,` tab `|`) e la codifica (UTF-8 o Windows-1252 di Excel) sono riconosciuti in automatico. Un `.txt` senza separatori è letto come un valore per riga. I valori di Excel appaiono come formattati nel foglio; le date in formato breve diventano `gg/mm/aaaa`.
+2. **Dati** (facoltativo): `.xlsx`, `.xls`, `.ods`, `.csv`, `.txt`, dal pulsante **Dati** della barra o da **＋ Carica database** nella sezione **Dati variabili** (colonna destra). Il separatore (`;` `,` tab `|`) e la codifica (UTF-8 o Windows-1252 di Excel) sono riconosciuti in automatico. Un `.txt` senza separatori è letto come un valore per riga. I valori di Excel appaiono come formattati nel foglio; le date in formato breve diventano `gg/mm/aaaa`.
 3. **Zone**: "＋ Testo" o "＋ Codice / QR", poi trascina e ridimensiona sulla pagina. Nel contenuto scrivi testo fisso e segnaposto:
    - `{Nome colonna}` → valore della colonna per quel record (clicca i nomi delle colonne per inserirli);
    - `{#}` → contatore, con inizio, passo e cifre (zeri iniziali) configurabili;
-   - `{@Nome}` → valore di un generatore di dati (vedi [Generatori di dati](#generatori-di-dati-senza-excel)).
+   - `{@Nome}` → valore di un generatore di dati (vedi [Generatori di dati](#generatori-di-dati-con-o-senza-excel)).
 
    Esempio: `Biglietto N. {#} - {Nome} {Cognome}`.
 4. **Anteprima**: la pagina mostra il risultato reale del record scelto (frecce ◀ ▶ o clic su una riga della tabella dati). Con più pagine per record scegli la pagina da modificare nel pannello **Pagine per record** o nel menu sopra l'anteprima.
-5. **Crea PDF**: tutti i record oppure un intervallo (utile per le ristampe: il contatore resta quello del record originale). Senza file dati imposti quanti record generare (predefinito 1; es. 500 per una numerazione 1–500).
+5. **Crea PDF** (pulsante in alto a destra). Le impostazioni sono nella sezione **Generazione PDF**: tutti i record oppure un intervallo (utile per le ristampe: il contatore resta quello del record originale) e il riepilogo delle pagine. Con un file dati il numero di record è quello delle righe (**Record disponibili**); senza dati lo imposti in **Record da generare** (predefinito 1; es. 500 per una numerazione 1–500).
 
 ### Pagine per record
 
@@ -100,11 +100,11 @@ Le immagini RGB con un profilo ICC lo conservano nel PDF. Per le immagini CMYK e
 - **Pagina**: sposta la zona su un'altra pagina del record, oppure **Copia su…** per crearne una copia nella stessa posizione su un'altra pagina.
 - Frecce della tastiera: sposta di 0,5 mm (Maiusc: 5 mm); Canc: elimina la zona.
 
-Se un valore non è stampabile (carattere assente nel font standard, EAN con lettere…) la generazione si ferma indicando record e zona: per alfabeti non latini carica un font TTF/OTF che li contenga.
+Se un valore non è stampabile (carattere assente nel font standard, EAN con lettere…) la generazione si ferma indicando record e zona: per alfabeti non latini carica un font TTF/OTF che li contenga (sezione **Risorse** della colonna destra, **＋ Carica font**).
 
-### Generatori di dati (senza Excel)
+### Generatori di dati (con o senza Excel)
 
-Numeri progressivi, codici univoci e date si possono creare anche senza un file di dati, dal pannello **Generatori di dati** nella colonna destra: scegli **＋ Nuovo generatore…** e poi **Numerazione**, **Codice univoco** o **Data/Ora**. Dagli un nome (per esempio `Matricola`): nell'editor della zona compare un pulsante verde `@Matricola` che inserisce il segnaposto `{@Matricola}` (puoi anche scriverlo a mano).
+Numeri progressivi, codici univoci e date si creano nella sezione **Dati variabili › Generatori** della colonna destra, con o senza un file di dati: scegli **＋ Nuovo generatore** e poi **Numerazione**, **Codice univoco** o **Data/Ora**. Ogni generatore mostra tipo, primi valori e numero di zone che lo usano; clicca la riga per le impostazioni. Dagli un nome (per esempio `Matricola`): nell'editor della zona compare un pulsante verde `@Matricola` che inserisce il segnaposto `{@Matricola}` (puoi anche scriverlo a mano).
 
 - Un generatore produce **un solo valore per record**, identico in tutte le zone che lo usano — testo, QR, codice a barre, fronte e retro.
 - Funzionano con o senza file dati; con i dati il numero di record è quello del file, senza dati lo imposti tu.

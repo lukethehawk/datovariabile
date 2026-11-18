@@ -332,3 +332,33 @@ Unicità solo dentro una serie (non fra generatori o progetti); chi ha il proget
 ### Miglioramenti futuri
 
 Anteprima in un worker persistente se servono serie oltre il milione; export dei codici in CSV (fuori ambito ora); opzione "riusa la data della prima generazione" per le ristampe, se richiesta.
+
+---
+
+## 2026-11-18: Riorganizzazione della colonna destra (Dati variabili, Generazione PDF, Risorse)
+
+### Obiettivo
+
+Solo interfaccia: la colonna destra aveva Dati / Generatori di dati / Crea PDF, con il numero di record manuale dentro "Dati", i font dentro "Crea PDF" e paragrafi descrittivi fissi (uno diceva che i generatori servono "senza file dati"). Nessun cambiamento a generatori, import, formato progetto o PDF.
+
+### Nuova struttura
+
+- **DATI VARIABILI**: sottosezione *Database* (vuota: "＋ Carica database" che riusa l'input `#in-data` della barra; caricata: nome, righe·colonne, Sostituisci, Rimuovi, foglio, intestazioni, anteprima alta 220 px) e *Generatori* (menu "＋ Nuovo generatore" con i tre tipi; schede con nome, tipo, zone che lo usano e primi valori visibili da chiuse; impostazioni ed eliminazione dentro).
+- **GENERAZIONE PDF**: `Record da generare` (senza dati, modificabile) oppure `Record disponibili` (righe del database, sola lettura; `state.manualCount` resta in memoria e ricompare alla rimozione), Dal/Al record, riepilogo `N record × P pagine = T pagine PDF` (con l'intervallo parziale indicato), avanzamento e risultato. `Crea PDF` resta solo nella barra.
+- **RISORSE**: Font aggiuntivi (lista, rimozione, "＋ Carica font").
+- Sezioni comprimibili (`src/ui/sections.ts`): intestazione = pulsante con `aria-expanded`/`aria-controls`, corpo `role=region`; stato in `localStorage` (predefinito aperta/aperta/chiusa), non nel progetto. A sezione chiusa l'intestazione mostra un riassunto (righe, generatori, pagine, font) e un ⚠ se c'è un problema (generatore non valido, riepilogo in errore), letto anche dagli screen reader. La generazione riapre la sezione per mostrare avanzamento, risultato o errore.
+- Testi lunghi sostituiti da pulsanti ⓘ con tooltip CSS (hover e focus, raggiungibili col puntatore, Escape li chiude, `aria-label` con il testo). Etichette delle select accorciate per stare in 272 px (i caratteri esatti dei codici nel tooltip della select).
+- Larghezza colonna `clamp(272px, 26vw, 360px)`: a 960 px la zona centrale passa da 300 a 388 px.
+
+### Verifiche
+
+- `npm test` 143/143, `npm run build` ok.
+- Chromium da `file://` (1600, 1200, 960 px, screenshot prima/dopo): stati nessun dato/nessun generatore, solo generatori (250 record manuali), database + generatori, intervallo 11–20, rimozione del database (torna 250, generatori intatti), avviso su sezione chiusa con codice da 1 carattere, apertura/chiusura da tastiera (Invio, Spazio), preferenza ricordata dopo ricarica, esclusione/inclusione del retro (riepilogo 120 ↔ 240 pagine), font caricato, salvataggio e riapertura (stessi esempi, database, font, "Record disponibili"), generazione con sezione chiusa (si riapre), nessuno scorrimento orizzontale della colonna.
+- Firefox da `file://` con lo stesso flusso: tutto ok, nessun errore.
+- Revisione indipendente GPT-6.1 Sol High (sola lettura). Corretti: conteggio record non aggiornato se i dati cambiano durante una generazione (ora `syncControls()` aggiorna riga record e limiti senza staccare avanzamento/risultato, verificato caricando un CSV durante una generazione di 8.000 pagine); risultato/errore nascosto se la sezione viene chiusa durante il lavoro (riapertura a fine lavoro); errori dei generatori troncati (ora vanno a capo); tooltip non raggiungibili col puntatore e non chiudibili (corretti); testo sui font impreciso per gli OTF CFF (corretto).
+
+### Problemi preesistenti segnalati, non modificati
+
+- Pulsanti "Velina" e "Apri progetto" della barra sono `<label>` con input nascosto: non raggiungibili con Tab.
+- Il riepilogo controlla la capacità dei generatori su tutte le zone, la generazione solo su quelle delle pagine attive: un generatore usato solo su una pagina esclusa può dare un falso errore nel riepilogo.
+- A finestre strette (≈ 960 px) la barra sopra l'anteprima (pagina, record, zoom) è compressa.

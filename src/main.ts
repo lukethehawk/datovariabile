@@ -2,10 +2,12 @@ import './style.css';
 import { openFile, saveProject } from './ui/actions';
 import { initDataPanel } from './ui/data-panel';
 import { $, errorMessage, toast } from './ui/dom';
+import { initFontsPanel } from './ui/fonts-panel';
 import { initGeneratorsPanel } from './ui/generators-panel';
 import { initOutput } from './ui/output';
 import { initPagesPanel } from './ui/pages-panel';
 import { initProps } from './ui/props';
+import { initSections, setSectionMeta } from './ui/sections';
 import { notify, on, state } from './ui/state';
 import { initViewer } from './ui/viewer';
 
@@ -27,12 +29,24 @@ function bindFileInput(selector: string): void {
   });
 }
 
+initSections();
 initViewer();
 initPagesPanel();
 initProps();
 initDataPanel();
 initOutput();
 initGeneratorsPanel();
+initFontsPanel();
+
+// Closed "Dati variabili" header: what is configured, at a glance.
+const syncDataMeta = () => {
+  const n = state.generators.length;
+  const parts = state.data ? [`${state.data.rows.length} righe`] : [];
+  if (n) parts.push(`${n} ${n === 1 ? 'generatore' : 'generatori'}`);
+  setSectionMeta('data', parts.join(' · '));
+};
+on(['data', 'generators'], syncDataMeta);
+syncDataMeta();
 
 bindFileInput('#in-template');
 bindFileInput('#in-data');

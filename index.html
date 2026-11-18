@@ -73,17 +73,54 @@
       </section>
 
       <aside class="right">
-        <section>
-          <h2>Dati</h2>
-          <div id="data-panel"></div>
+        <section class="panel" data-section="data">
+          <h2 class="section-head">
+            <button type="button" class="section-toggle" id="sec-data-btn" aria-expanded="true" aria-controls="sec-data">
+              <span class="chevron" aria-hidden="true"></span>
+              <span class="section-title">Dati variabili</span>
+              <span class="section-meta"></span>
+              <span class="section-alert" hidden><span aria-hidden="true">⚠</span><span class="sr-only"></span></span>
+            </button>
+          </h2>
+          <div class="section-body" id="sec-data" role="region" aria-labelledby="sec-data-btn">
+            <div class="subsection">
+              <h3>Database <button type="button" class="info" data-tip="Excel (.xlsx, .xls, .ods), CSV o TXT: una riga per record, nelle zone usa {Colonna}. Facoltativo: puoi anche trascinare il file sulla finestra." aria-label="Informazioni sul database">ⓘ</button></h3>
+              <div id="data-panel"></div>
+            </div>
+            <div class="subsection">
+              <h3>Generatori <button type="button" class="info" data-tip="Numerazione, codici univoci e date: un valore per record, uguale in tutte le zone che usano {@Nome} (anche fronte e retro). Funzionano con o senza database." aria-label="Informazioni sui generatori">ⓘ</button></h3>
+              <div id="generators-panel"></div>
+            </div>
+          </div>
         </section>
-        <section>
-          <h2>Generatori di dati</h2>
-          <div id="generators-panel"></div>
+        <section class="panel" data-section="output">
+          <h2 class="section-head">
+            <button type="button" class="section-toggle" id="sec-output-btn" aria-expanded="true" aria-controls="sec-output">
+              <span class="chevron" aria-hidden="true"></span>
+              <span class="section-title">Generazione PDF</span>
+              <span class="section-meta"></span>
+              <span class="section-alert" hidden><span aria-hidden="true">⚠</span><span class="sr-only"></span></span>
+            </button>
+          </h2>
+          <div class="section-body" id="sec-output" role="region" aria-labelledby="sec-output-btn">
+            <div id="output-panel"></div>
+          </div>
         </section>
-        <section>
-          <h2>Crea PDF</h2>
-          <div id="output-panel"></div>
+        <section class="panel" data-section="resources">
+          <h2 class="section-head">
+            <button type="button" class="section-toggle" id="sec-resources-btn" aria-expanded="false" aria-controls="sec-resources">
+              <span class="chevron" aria-hidden="true"></span>
+              <span class="section-title">Risorse</span>
+              <span class="section-meta"></span>
+              <span class="section-alert" hidden><span aria-hidden="true">⚠</span><span class="sr-only"></span></span>
+            </button>
+          </h2>
+          <div class="section-body" id="sec-resources" role="region" aria-labelledby="sec-resources-btn" hidden>
+            <div class="subsection">
+              <h3>Font aggiuntivi <button type="button" class="info" data-tip="I font standard (Helvetica, Times, Courier) non occupano spazio nel PDF. Carica un TTF/OTF per altri caratteri o simboli non latini: dei TTF viene incluso solo il sottoinsieme usato, gli OTF con contorni CFF sono inclusi interi." aria-label="Informazioni sui font">ⓘ</button></h3>
+              <div id="fonts-panel"></div>
+            </div>
+          </div>
         </section>
       </aside>
     </main>

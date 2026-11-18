@@ -180,7 +180,8 @@ button.link:hover {
 main {
   flex: 1;
   display: grid;
-  grid-template-columns: 300px 1fr 360px;
+  /* The right column gives way first on narrower windows (inner controls fit down to 272 px). */
+  grid-template-columns: 300px minmax(0, 1fr) clamp(272px, 26vw, 360px);
   min-height: 0;
 }
 
@@ -213,6 +214,192 @@ h2 {
 
 .hint {
   line-height: 1.45;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.warn {
+  color: #9a5b00;
+}
+
+button.link.danger {
+  color: var(--danger);
+}
+
+button.link.danger:hover:not(:disabled) {
+  color: #a11;
+}
+
+button.link:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ------------------------------------------- right column: collapsible sections */
+
+aside.right section.panel {
+  padding: 0;
+}
+
+.section-head {
+  margin: 0;
+}
+
+/* The whole header is the toggle: big target, keyboard and screen reader friendly (aria-expanded). */
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--muted);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.section-toggle:hover {
+  color: var(--text);
+  background: #f8f9fa;
+}
+
+.section-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sel) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.section-toggle .chevron {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+}
+
+.section-toggle[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+}
+
+.section-title {
+  flex: none;
+}
+
+/* Summary and warning only matter while closed: the open body shows the details. */
+.section-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+}
+
+.section-alert {
+  flex: none;
+  color: var(--danger);
+  font-size: 13px;
+  text-transform: none;
+}
+
+.section-toggle[aria-expanded='true'] .section-meta,
+.section-toggle[aria-expanded='true'] .section-alert {
+  visibility: hidden;
+}
+
+.section-body {
+  padding: 2px 12px 12px;
+  animation: section-in 0.14s ease-out;
+}
+
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-body {
+    animation: none;
+  }
+
+  .section-toggle .chevron {
+    transition: none;
+  }
+}
+
+/* Sub-sections (Database, Generatori, Font aggiuntivi): a heading and a hairline, no nested boxes. */
+.subsection + .subsection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #eceef1;
+}
+
+.subsection h3 {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* ⓘ: tip shown on hover and keyboard focus, spanning the heading width so it never leaves the column. */
+button.info {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  font-weight: 400;
+  color: var(--muted);
+  cursor: help;
+  line-height: 1;
+}
+
+button.info:hover,
+button.info:focus-visible {
+  color: var(--sel);
+}
+
+/* Hoverable (no gap, pointer events kept) and dismissible with Escape (data-dismissed, see sections.ts). */
+button.info:hover:not([data-dismissed])::after,
+button.info:focus:not([data-dismissed])::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  padding: 7px 9px;
+  border-top: 4px solid transparent;
+  background: #212529 padding-box;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  cursor: default;
 }
 
 /* ---------------------------------------------------------------- fields */
@@ -603,92 +790,203 @@ label.check {
   white-space: nowrap;
 }
 
-/* Generatori di dati */
+/* Generatori */
 
-/* Il pannello vive nella colonna destra: niente scroll orizzontale. */
 #generators-panel {
   min-width: 0;
 }
 
-#generators-panel p.hint {
+#generators-panel > p.small {
   margin: 0 0 8px;
-  line-height: 1.45;
 }
 
-/* Una scheda per generatore: stesso look dei fieldset delle proprietà. */
+/* One card per generator: name, type, uses and first values visible while closed. */
 #generators-panel details.gen {
   border: 1px solid var(--border);
   border-radius: 6px;
   margin: 0 0 6px;
-  padding: 6px 8px 8px;
   min-width: 0;
 }
 
-#generators-panel details.gen summary {
+#generators-panel details.gen.has-problem {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+#generators-panel details.gen > summary {
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px 7px 22px;
+  position: relative;
   cursor: pointer;
+  list-style: none;
+  border-radius: 6px;
+}
+
+#generators-panel details.gen > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Same chevron as the section headers. */
+#generators-panel details.gen > summary::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 11px;
+  border-left: 5px solid var(--muted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+}
+
+#generators-panel details.gen[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+#generators-panel details.gen > summary:hover {
+  background: #f8f9fa;
+}
+
+#generators-panel details.gen > summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sel) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.gen-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gen-name {
+  font-size: 12.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-bottom: 4px;
+  min-width: 0;
 }
 
-#generators-panel details.gen summary strong {
-  font-size: 12px;
+.gen-type {
+  flex: none;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #eefaf2;
+  color: #1c6b38;
 }
 
-/* Le celle delle griglie non devono allargarsi oltre la colonna. */
-#generators-panel details.gen .grid2 {
+.gen-uses {
+  margin-left: auto;
+  flex: none;
+}
+
+.gen-sample {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+code.gen-sample {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 11px;
+  color: #495057;
+}
+
+.gen-body {
+  padding: 6px 8px 8px;
+  border-top: 1px solid #eceef1;
+}
+
+/* Grid cells never grow beyond the column. */
+#generators-panel .grid2 {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-#generators-panel details.gen .grid3 {
+#generators-panel .grid3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-#generators-panel details.gen label.row {
+#generators-panel .grid2.align-end {
+  align-items: end;
+}
+
+#generators-panel .grid2.align-end > .btn {
+  margin-bottom: 6px;
+  justify-self: start;
+}
+
+#generators-panel label.row {
   min-width: 0;
 }
 
-#generators-panel details.gen input,
-#generators-panel details.gen select {
-  width: 100%;
-  min-width: 0;
-}
-
-#generators-panel details.gen p.small {
-  margin: 4px 0 6px;
-  line-height: 1.35;
-}
-
-#generators-panel details.gen button.btn.small {
-  margin-bottom: 2px;
-}
-
-/* Esempi generati: monospace su fondo leggero, vanno a capo. */
-#generators-panel details.gen p.gen-example code {
-  font-family: Consolas, 'Cascadia Mono', monospace;
-  font-size: 11px;
-  background: #f1f3f5;
-  border-radius: 3px;
-  padding: 1px 4px;
+#generators-panel label.row > span {
   overflow-wrap: anywhere;
 }
 
-#generators-panel details.gen button.link.danger {
-  color: var(--danger);
+.gen-sample.error {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-#generators-panel details.gen button.link.danger:hover:not(:disabled) {
-  color: #a11;
-}
-
-#generators-panel details.gen button.link.danger:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-#generators-panel select {
+#generators-panel .gen-body input,
+#generators-panel .gen-body select {
   width: 100%;
+  min-width: 0;
+}
+
+#generators-panel .gen-body p.small {
+  margin: 2px 0 6px;
+  line-height: 1.35;
+}
+
+#generators-panel .gen-body > .btn.small,
+#generators-panel .gen-body > button.link {
+  margin: 2px 0 8px;
+}
+
+#generators-panel .gen-body > button.link {
+  display: block;
+  padding: 2px 0;
+}
+
+/* "＋ Nuovo generatore": a disclosure listing the three types, inline (no overlay to clip). */
+details.gen-add > summary {
+  display: inline-flex;
+  list-style: none;
+}
+
+details.gen-add > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.gen-add[open] > summary {
+  background: #f1f3f5;
+}
+
+.gen-add-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.gen-add-list button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gen-add-list button:hover,
+.gen-add-list button:focus-visible {
+  border-color: var(--sel);
+  background: #f5f9fe;
 }
 
 /* Chip dei generatori: tinta verde, distinta dal contatore arancione. */
@@ -869,17 +1167,29 @@ label.check {
 
 /* ---------------------------------------------------------------- data */
 
+.data-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
 .data-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .data-head .file {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.data-size {
+  margin: 1px 0 6px;
 }
 
 .data-opts {
@@ -887,11 +1197,24 @@ label.check {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  margin: 6px 0;
+  margin: 0 0 6px;
+}
+
+.data-opts .sheet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.data-opts .sheet select {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .table-wrap {
-  max-height: 300px;
+  max-height: 220px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -936,28 +1259,59 @@ tbody tr.current {
 
 /* ---------------------------------------------------------------- output */
 
-#output-panel fieldset {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  margin: 10px 0;
-  padding: 6px 10px 10px;
+div.row.records {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 6px;
 }
 
-#output-panel legend {
+div.row.records > span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.records-value {
   font-weight: 600;
-  font-size: 12px;
-  padding: 0 4px;
+  padding: 4px 0;
+}
+
+.summary {
+  margin: 2px 0 0;
+  padding: 7px 9px;
+  border-radius: 5px;
+  background: #f8f9fa;
+  line-height: 1.4;
+}
+
+.summary.error {
+  background: #fff5f5;
 }
 
 .fonts {
   list-style: none;
   padding: 0;
-  margin: 4px 0 8px;
+  margin: 0 0 8px;
 }
 
 .fonts li {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid #eceef1;
+}
+
+.font-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#fonts-panel > p.small {
+  margin: 0 0 8px;
 }
 
 #progress {

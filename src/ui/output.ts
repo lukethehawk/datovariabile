@@ -1,10 +1,10 @@
 import GenerateWorker from '../worker?worker&inline';
 import type { WorkerMessage, WorkerRequest } from '../worker';
-import { addFont, removeFont } from './actions';
+import { revealSection, setSectionAlert, setSectionMeta } from './sections';
 import { generatorProblem, referencedGenerators, uniqueMaxRecords } from '../core/generators';
 import type { Field } from '../core/types';
 import { $, download, errorMessage, formatBytes, h, toast } from './dom';
-import { enabledSlots, jobSources, on, recordCount, recordRange, slotPage, state } from './state';
+import { enabledSlots, jobSources, notify, on, recordCount, recordRange, slotPage, state } from './state';
 
 /** Problem of a generator used by the fields, checked before generating `count` records (absolute). */
 function generatorIssue(fields: Field[], count: number): string | null {
@@ -25,9 +25,8 @@ const generateBtn = $('#btn-generate') as HTMLButtonElement;
 let worker: Worker | null = null;
 
 function render(): void {
-  const n = recordCount();
   const rangeInput = (key: 'rangeFrom' | 'rangeTo', placeholder: string) => {
-    const el = h('input', { type: 'number', min: 1, max: n, step: 1, placeholder, value: state[key] });
+    const el = h('input', { type: 'number', min: 1, step: 1, placeholder, value: state[key], 'data-range': key });
     el.addEventListener('input', () => {
       state[key] = el.value;
       renderSummary();
@@ -36,61 +35,74 @@ function render(): void {
   };
 
   panel.replaceChildren(
+    h('div', { id: 'records-slot' }),
     h('div', { class: 'grid2' },
       h('label', { class: 'row' }, h('span', {}, 'Dal record'), rangeInput('rangeFrom', '1')),
-      h('label', { class: 'row' }, h('span', {}, 'Al record'), rangeInput('rangeTo', String(n))),
+      h('label', { class: 'row' }, h('span', {}, 'Al record'), rangeInput('rangeTo', '')),
     ),
-    h('div', { id: 'summary', class: 'muted small' }),
-    fontsSection(),
+    h('p', { id: 'summary', class: 'summary', role: 'status' }),
     h('div', { id: 'progress', hidden: true }, h('progress', { max: 1, value: 0 }), h('span', { class: 'small' })),
     h('div', { id: 'result' }),
   );
+  syncControls();
+}
+
+/** Record count row and range limits; safe while a job runs (progress/result stay attached). */
+function syncControls(): void {
+  const n = recordCount();
+  panel.querySelector('#records-slot')?.replaceChildren(recordsRow(n));
+  for (const el of panel.querySelectorAll<HTMLInputElement>('input[data-range]')) {
+    el.max = String(n);
+    if (el.dataset.range === 'rangeTo') el.placeholder = String(n);
+  }
   renderSummary();
+}
+
+/** With a data file the count comes from its rows (read-only); otherwise it is typed (state.manualCount, kept while data is loaded). */
+function recordsRow(n: number): HTMLElement {
+  if (state.data) {
+    return h('div', { class: 'row records' },
+      h('span', { id: 'records-label' }, 'Record disponibili'),
+      h('output', { class: 'records-value', 'aria-labelledby': 'records-label' }, String(n), h('span', { class: 'muted small' }, ' righe del database')),
+    );
+  }
+  const el = h('input', { type: 'number', min: 1, step: 1, value: state.manualCount });
+  el.addEventListener('change', () => {
+    state.manualCount = Math.max(1, Math.floor(el.valueAsNumber || 1));
+    el.value = String(state.manualCount);
+    notify('output', 'view');
+  });
+  return h('label', { class: 'row records' }, h('span', {}, 'Record da generare'), el);
 }
 
 function renderSummary(): void {
   const el = panel.querySelector('#summary');
   if (!el) return;
+  let problem: string | null = null;
+  let pages = '';
   if (!state.slots.length) {
     el.textContent = 'Carica una velina (PDF, JPG o PNG) per iniziare.';
-    return;
-  }
-  try {
-    const { from, to } = recordRange();
-    const perRecord = enabledSlots().length;
-    if (!perRecord) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
-    const issue = generatorIssue(state.fields, to + 1);
-    if (issue) throw new Error(issue);
-    const records = to - from + 1;
-    el.textContent = `${records} record × ${perRecord} pag. = ${records * perRecord} pagine`;
     el.classList.remove('error');
-  } catch (e) {
-    el.textContent = errorMessage(e);
-    el.classList.add('error');
-  }
-}
-
-function fontsSection(): HTMLElement {
-  const input = h('input', { type: 'file', accept: '.ttf,.otf', multiple: true, hidden: true });
-  input.addEventListener('change', async () => {
-    for (const file of input.files ?? []) {
-      try {
-        addFont(file.name, new Uint8Array(await file.arrayBuffer()));
-      } catch (e) {
-        toast(errorMessage(e), 'error');
-      }
+  } else {
+    try {
+      const { from, to } = recordRange();
+      const perRecord = enabledSlots().length;
+      if (!perRecord) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
+      const issue = generatorIssue(state.fields, to + 1);
+      if (issue) throw new Error(issue);
+      const records = to - from + 1;
+      pages = `${records * perRecord} ${records * perRecord === 1 ? 'pagina' : 'pagine'}`;
+      const partial = records < recordCount() ? ` (record ${from + 1}–${to + 1} di ${recordCount()})` : '';
+      el.textContent = `${records} record × ${perRecord} ${perRecord === 1 ? 'pagina' : 'pagine'} = ${pages} PDF${partial}`;
+      el.classList.remove('error');
+    } catch (e) {
+      problem = errorMessage(e);
+      el.textContent = problem;
+      el.classList.add('error');
     }
-    input.value = '';
-  });
-  return h('fieldset', {}, h('legend', {}, 'Font aggiuntivi'),
-    h('p', { class: 'muted small' }, 'I font standard (Helvetica, Times, Courier) non occupano spazio nel PDF. Carica un TTF/OTF per altri caratteri o simboli non latini: viene incluso solo il sottoinsieme usato.'),
-    h('ul', { class: 'fonts' },
-      ...state.fonts.map((f) =>
-        h('li', {}, f.name, h('button', { type: 'button', class: 'link', title: 'Rimuovi', onclick: () => removeFont(f.name) }, '✕')),
-      ),
-    ),
-    h('label', { class: 'btn small' }, 'Carica font…', input),
-  );
+  }
+  setSectionAlert('output', problem);
+  setSectionMeta('output', pages);
 }
 
 function outputName(): string {
@@ -108,6 +120,8 @@ async function runGeneration(): Promise<void> {
     return;
   }
   if (!state.slots.length) return toast('Carica prima una velina (PDF, JPG o PNG)', 'error');
+  // Progress, result and warnings live in this section: make sure they are visible.
+  revealSection('output');
   let request: WorkerRequest;
   try {
     const { from, to } = recordRange();
@@ -147,6 +161,8 @@ async function runGeneration(): Promise<void> {
     worker?.terminate();
     worker = null;
     finish();
+    // The section may have been closed while the job ran: the result or error must be seen.
+    revealSection('output');
     if (msg.type === 'error') {
       result.replaceChildren(h('p', { class: 'error' }, msg.message));
       return;
@@ -166,6 +182,7 @@ async function runGeneration(): Promise<void> {
     worker?.terminate();
     worker = null;
     finish();
+    revealSection('output');
     result.replaceChildren(h('p', { class: 'error' }, e.message || 'Errore durante la generazione'));
   };
   worker.postMessage(request);
@@ -178,8 +195,8 @@ function finish(): void {
 }
 
 export function initOutput(): void {
-  // While a job runs its progress/result elements must stay attached: refresh only the summary.
-  on(['composition', 'data', 'fonts', 'output'], () => (worker ? renderSummary() : render()));
+  // While a job runs its progress/result elements must stay attached: refresh only the controls.
+  on(['composition', 'data', 'output'], () => (worker ? syncControls() : render()));
   on(['generators', 'fields'], renderSummary);
   generateBtn.addEventListener('click', () => void runGeneration());
   render();

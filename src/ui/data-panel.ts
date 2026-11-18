@@ -6,13 +6,18 @@ import { notify, on, setSourceHeader, state } from './state';
 const panel = $('#data-panel');
 const PREVIEW_ROWS = 200;
 
+/** Same file input as the toolbar "Dati" button: one import path. */
+const chooseFile = () => ($('#in-data') as HTMLInputElement).click();
+
 function render(): void {
   const src = state.source;
   const data = state.data;
   if (!src || !data) {
     panel.replaceChildren(
-      h('p', { class: 'muted hint' }, 'Carica un file Excel (.xlsx, .xls, .ods), CSV o TXT. La prima riga può contenere i nomi delle colonne. Senza dati puoi comunque numerare con il contatore {#}.'),
-      h('label', { class: 'row' }, h('span', {}, 'Record da generare (senza dati)'), manualCountInput()),
+      h('div', { class: 'data-empty' },
+        h('button', { type: 'button', class: 'btn small', onclick: chooseFile }, '＋ Carica database'),
+        h('span', { class: 'muted small' }, 'Excel, CSV o TXT · facoltativo'),
+      ),
     );
     return;
   }
@@ -68,27 +73,18 @@ function render(): void {
   panel.replaceChildren(
     h('div', { class: 'data-head' },
       h('strong', { class: 'file', title: src.name }, src.name),
-      h('button', { type: 'button', class: 'link', onclick: clearData, title: 'Rimuovi i dati' }, '✕'),
+      h('button', { type: 'button', class: 'link', onclick: chooseFile, title: 'Carica un altro file al posto di questo' }, 'Sostituisci'),
+      h('button', { type: 'button', class: 'link danger', onclick: clearData, 'aria-label': 'Rimuovi il database', title: 'Rimuovi il database (generatori e zone restano)' }, 'Rimuovi'),
     ),
+    h('p', { class: 'muted small data-size' }, `${data.rows.length} ${data.rows.length === 1 ? 'riga' : 'righe'} · ${data.columns.length} ${data.columns.length === 1 ? 'colonna' : 'colonne'}`),
     h('div', { class: 'data-opts' },
-      sheetSelect ? h('label', {}, 'Foglio ', sheetSelect) : null,
+      sheetSelect ? h('label', { class: 'sheet' }, h('span', { class: 'muted small' }, 'Foglio'), sheetSelect) : null,
       h('label', { class: 'check' }, header, 'Prima riga = intestazioni'),
-      h('span', { class: 'muted' }, `${data.rows.length} record · ${data.columns.length} colonne`),
     ),
     h('div', { class: 'table-wrap' }, table),
     data.rows.length > PREVIEW_ROWS ? h('p', { class: 'muted small' }, `Anteprima delle prime ${PREVIEW_ROWS} righe.`) : '',
   );
   panel.querySelector('tr.current')?.scrollIntoView({ block: 'nearest' });
-}
-
-function manualCountInput(): HTMLInputElement {
-  const el = h('input', { type: 'number', min: 1, step: 1, value: state.manualCount });
-  el.addEventListener('change', () => {
-    state.manualCount = Math.max(1, Math.floor(el.valueAsNumber || 1));
-    el.value = String(state.manualCount);
-    notify('output', 'view');
-  });
-  return el;
 }
 
 export function initDataPanel(): void {
