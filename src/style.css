@@ -757,6 +757,47 @@ label.check {
   min-width: 0;
 }
 
+#composition > .btn.small {
+  margin: 0 0 10px;
+}
+
+/* "Nuova pagina vuota": small native modal, same controls as the panels. */
+.blank-dialog {
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.2);
+}
+
+.blank-dialog::backdrop {
+  background: rgb(0 0 0 / 0.25);
+}
+
+.blank-dialog .grid2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.blank-dialog input {
+  width: 100%;
+}
+
+.blank-dialog p {
+  margin: 2px 0 8px;
+}
+
+.blank-dialog p.error:empty {
+  display: none;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 #composition fieldset.raster {
   border: 1px solid var(--border);
   border-radius: 6px;

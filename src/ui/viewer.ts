@@ -1,4 +1,5 @@
 import type { RenderTask } from 'pdfjs-dist';
+import { formatMm } from '../core/blank';
 import { generate, type JobPage } from '../core/generate';
 import type { Field } from '../core/types';
 import { openPdf } from './actions';
@@ -231,7 +232,7 @@ function renderStageBar(): void {
       let size = '';
       try {
         const g = slotPage(s).geometry;
-        size = ` (${(g.viewWidth / MM).toFixed(0)}×${(g.viewHeight / MM).toFixed(0)} mm)`;
+        size = ` (${formatMm(g.viewWidth / MM)}×${formatMm(g.viewHeight / MM)} mm)`;
       } catch {
         // page setup not resolvable yet: shown in the preview error
       }
@@ -304,7 +305,8 @@ export function initViewer(): void {
 
   window.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
-    if (target.closest('input, textarea, select')) return;
+    // Not while typing, nor inside a modal dialog (its buttons must not move or delete the selected zone).
+    if (target.closest('input, textarea, select, dialog')) return;
     const f = selectedField();
     if (!f) return;
     const step = (e.shiftKey ? 5 : 0.5) * MM;

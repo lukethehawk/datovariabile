@@ -1,7 +1,9 @@
+import { formatMm } from '../core/blank';
 import { newId } from '../core/composition';
 import { defaultLayout, rasterPage } from '../core/raster';
 import type { RasterLayout, Slot } from '../core/types';
 import { removeSource } from './actions';
+import { openBlankPageDialog } from './blank-page';
 import { backgroundKey, withSlotPage } from './backgrounds';
 import { $, errorMessage, formatBytes, h, toast } from './dom';
 import { cloneField, currentSlot, enabledSlots, MM, notify, on, slotLabel, slotPage, sourceOf, state } from './state';
@@ -74,7 +76,7 @@ function slotRow(slot: Slot, i: number): HTMLElement {
   let size = '';
   try {
     const g = slotPage(slot).geometry;
-    size = `${(g.viewWidth / MM).toFixed(0)}×${(g.viewHeight / MM).toFixed(0)} mm`;
+    size = `${formatMm(g.viewWidth / MM)}×${formatMm(g.viewHeight / MM)} mm`;
   } catch (e) {
     size = errorMessage(e);
   }
@@ -230,9 +232,15 @@ function rasterSettings(slot: Slot): HTMLElement | null {
   );
 }
 
+/** Blank page of a chosen size (labels with only variable data): available with or without files. */
+const blankPageButton = () => h('button', { type: 'button', class: 'btn small', onclick: openBlankPageDialog }, '＋ Nuova pagina vuota');
+
 function render(): void {
   if (!state.sources.length) {
-    panel.replaceChildren(h('p', { class: 'muted hint' }, 'Carica uno o più file grafici (PDF, JPG o PNG): ogni pagina diventa una pagina del record (es. fronte e retro). Puoi riordinarle, ripeterle ed escluderle.'));
+    panel.replaceChildren(
+      h('p', { class: 'muted hint' }, 'Carica uno o più file grafici (PDF, JPG o PNG) oppure crea una pagina vuota: ogni pagina diventa una pagina del record (es. fronte e retro). Puoi riordinarle, ripeterle ed escluderle.'),
+      blankPageButton(),
+    );
     return;
   }
   const slot = currentSlot();
@@ -244,6 +252,7 @@ function render(): void {
     h('ol', { class: 'slots' }, ...state.slots.map(slotRow)),
     h('p', { class: 'muted small' }, `${perRecord} ${perRecord === 1 ? 'pagina' : 'pagine'} per record, in quest’ordine.`),
     addPageRow(),
+    blankPageButton(),
     (slot && rasterSettings(slot)) ?? '',
     h('details', { class: 'files-box' }, h('summary', { class: 'small' }, `File grafici caricati (${state.sources.length})`), filesList()),
   );

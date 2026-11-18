@@ -49,6 +49,14 @@ La composizione si gestisce nel pannello **Pagine per record** (colonna sinistra
 
 Carica `fronte.pdf` e `retro.pdf` (oppure `fronte.jpg` e `retro.pdf`): con 100 righe di dati ottieni un PDF di 200 pagine, nell'ordine fronte 1, retro 1, fronte 2, retro 2, … Se serve, riordina le pagine nel pannello **Pagine per record**.
 
+### Pagine vuote (etichette senza grafica)
+
+Per etichette con soli dati variabili (DataMatrix, QR, codici a barre, numerazioni, matricole, date) non serve preparare un PDF: nel pannello **Pagine per record** clicca **＋ Nuova pagina vuota**, scrivi larghezza e altezza in millimetri (fino a 2 decimali con la virgola, es. `50,5`; da 2 a 5080 mm) e, se vuoi, un nome. La pagina bianca compare subito nell'anteprima, senza margini e con le misure esatte, e si usa come qualsiasi altra pagina: zone, generatori, colonne dei dati, duplica, riordina, escludi, elimina, insieme a pagine PDF o immagini.
+
+Esempio: pagina vuota 50 × 30 mm, **Record da generare** 1000, una zona DataMatrix con `{@Codice}` e una zona testo con `N. {#}` → PDF di 1000 pagine da 50 × 30 mm (circa 0,7 MB).
+
+La pagina vuota è un piccolo PDF creato dall'app: viene salvata nel progetto `.dvp.zip` come gli altri file grafici e alla riapertura non serve nessun file esterno.
+
 ### Immagini JPG e PNG come grafica
 
 Un JPG o PNG può fare da file grafico come un PDF. Per ogni pagina immagine scegli:

@@ -81,7 +81,7 @@ function renderSummary(): void {
   let problem: string | null = null;
   let pages = '';
   if (!state.slots.length) {
-    el.textContent = 'Carica un file grafico (PDF, JPG o PNG) per iniziare.';
+    el.textContent = 'Carica un file grafico (PDF, JPG o PNG) o crea una pagina vuota per iniziare.';
     el.classList.remove('error');
   } else {
     try {
@@ -116,7 +116,7 @@ async function runGeneration(): Promise<void> {
     toast('Generazione annullata');
     return;
   }
-  if (!state.slots.length) return toast('Carica prima un file grafico (PDF, JPG o PNG)', 'error');
+  if (!state.slots.length) return toast('Carica prima un file grafico (PDF, JPG o PNG) o crea una pagina vuota', 'error');
   // Progress, result and warnings live in this section: make sure they are visible.
   revealSection('output');
   let request: WorkerRequest;

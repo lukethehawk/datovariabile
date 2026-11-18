@@ -399,3 +399,38 @@ Causa: una riga flex senza `wrap`, con spaziatori e la didascalia "Anteprima rec
 - Chromium e Firefox (playwright-core, `file://`) con sola tastiera: Tab raggiunge Grafica, Dati, Apri progetto con contorno di focus; Invio e Spazio aprono un solo selettore; annullamento senza effetti, il focus resta sul controllo; caricamento di due file grafici, CSV, `.dvp.zip` e vecchio `.dvp.json` v1; drag & drop di un CSV; riepilogo con retro disabilitato (`120 record × 1 pagina`) e riattivato (errore del generatore), PDF da 120 pagine col retro disabilitato e da 240 pagine fronte/retro, salvataggio e riapertura con valori identici; nessun errore in console. Nota per le prove: il Chromium di Playwright avviato da `file://` blocca i worker in data URL (pdf.js passa al "fake worker", la generazione fallisce con "Errore durante la generazione") se non si passa `--allow-file-access-from-files`; lo stesso build generato nel Chromium gestito dall'harness, senza flag, funziona: è una restrizione di quell'avvio, non un difetto dell'app.
 - WebKit: la build di Playwright presente non corrisponde alla versione di `playwright-core` e non si avvia; Safari e gli annunci reali degli screen reader restano non verificati.
 - Revisione indipendente GPT-6.1 Sol High (subagente `council-sol`, Advisor disattivato): nessun problema bloccante; accolta la nota di efficienza (`activeComposition` non costruisce il `Set` senza zone); confermato che l'archivio debba continuare a validare tutti i generatori.
+
+---
+
+## 2026-11-18: Pagine vuote personalizzate (etichette senza file grafico)
+
+### Obiettivo
+
+Creare direttamente nell'app una pagina bianca di misura scelta (es. etichetta 50 × 30 mm) su cui mettere DataMatrix, QR, numerazioni e testi variabili, senza preparare un PDF esterno.
+
+### Decisione architetturale
+
+Valutate due strade: un nuovo tipo di sorgente `blank` oppure un PDF vuoto creato in memoria. Scelto il **PDF in memoria** (`src/core/blank.ts`, `blankPagePdf()`), aggiunto con la normale `addSource()`: composizione, anteprima reale, incorporazione (un Form XObject vuoto condiviso da tutti i record), archivio (`veline/`, `kind:'pdf'`) e riapertura funzionano senza codice nuovo, e il **formato `.dvp.zip` resta alla versione 4**. Un tipo `blank` avrebbe richiesto percorsi paralleli in composizione, anteprima, generazione, manifest e migrazione, senza vantaggi concreti (confermato dalla revisione). Il PDF pesa ~530 byte, non ha contenuti né date: byte deterministici, così stessa misura e stesso nome danno lo stesso file e `addSource()` lo condivide invece di salvarlo due volte.
+
+### Interfaccia
+
+- "＋ Nuova pagina vuota" nel pannello Pagine per record, sia senza file sia con pagine già presenti; menzionato nella guida iniziale e nel riepilogo vuoto.
+- `<dialog>` nativo (`src/ui/blank-page.ts`): larghezza e altezza in mm (virgola italiana, al massimo 2 decimali, da 2 a 5080 mm), nome facoltativo (predefinito "Pagina vuota 50 × 30 mm"), messaggi d'errore che indicano il lato sbagliato; Esc/Annulla chiudono, Invio crea; durante la creazione i controlli sono bloccati (nessun doppio invio, nessuna chiusura a metà). Le ultime misure usate vengono riproposte nella sessione.
+- Le misure delle pagine nel pannello e nel menu sopra l'anteprima ora hanno fino a 2 decimali (prima erano arrotondate al millimetro: 50,5 × 30,25 appariva 51 × 30).
+
+### Misure e prestazioni
+
+- MediaBox verificati (test e PDF reali): 50×30, 100×150, 30×20, 210×297, 50,5×30,25 mm, entro 0,01 mm, origine 0,0, nessuna rotazione né CropBox.
+- Chromium da `file://`: pagina 50×30 senza file, 1000 record manuali, DataMatrix `{@Codice}` + testo `N. {#}` → 1000 pagine da 50,000 × 30,000 mm, 682 KB, 1,8 s, un solo Form XObject; il PDF ricaricato nell'app coincide con l'anteprima (posizioni di testo e DataMatrix).
+- Node (test): 1000 record con DataMatrix + testo + QR in ~6 s, 1,05 MB.
+
+### Test e verifiche
+
+- `tests/blank-page.test.ts` (12 test, scritti da un subagente TASK e ricontrollati): parsing e nomi, limiti, MediaBox delle 5 misure, determinismo e peso, 1000 etichette con DataMatrix/QR/testo, composizione mista PDF + vuota con database e generatore condiviso, duplicazione e riordino con un solo sfondo incorporato, archivio v4 con rilettura.
+- `npm test` 165/165, `npm run build` ok.
+- Chromium e Firefox (playwright-core, `file://`): fronte PDF + vuota 50,5×30,25 duplicata e riordinata, 3 record → 9 pagine nell'ordine giusto con misure esatte, stesso valore del generatore su tutte le pagine del record, salva/riapri con nomi, misure e zone; nessun errore in console.
+- Revisione GPT-6.1 Sol High (subagente `council-sol`): architettura approvata. Corretti: le scorciatoie dell'editor (frecce, Canc) agivano sulla zona selezionata anche con il focus sui pulsanti del dialogo (ora ignorate dentro un `<dialog>`; verificato in entrambi i browser); minimo portato da 1 a 2 mm perché i lettori PDF accettano pagine da 3 pt (1,06 mm); Annulla/Esc durante la creazione; precisione fissata a 2 decimali (prima i decimali in più venivano arrotondati in modo silenzioso nel nome e alla riapertura del dialogo); misure con decimali anche nel menu sopra l'anteprima. Il subagente dei test ha segnalato anche "La altezza" (ora "L'altezza") e "Etichetta.pdf.pdf" (l'estensione digitata viene tolta).
+
+### Limiti
+
+Le misure si scelgono alla creazione: per cambiarle si crea una nuova pagina vuota (un editor delle dimensioni potrà essere valutato a parte). La pagina vuota appare nell'elenco con estensione `.pdf` perché è a tutti gli effetti un PDF salvato nel progetto.
