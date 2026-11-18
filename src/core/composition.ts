@@ -5,7 +5,7 @@
  */
 import { inspectTemplate, type JobPage } from './generate';
 import { defaultLayout, inspectRaster, rasterPage, type RasterInfo } from './raster';
-import type { Slot, SourceKind, TemplatePage } from './types';
+import type { Field, Slot, SourceKind, TemplatePage } from './types';
 
 /** What the editor needs to know about a source without keeping it parsed. */
 export type SourceInfo = { kind: 'pdf'; pages: TemplatePage[] } | { kind: 'jpeg' | 'png'; raster: RasterInfo };
@@ -28,6 +28,17 @@ export const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(
 export function slotsFor(sourceId: string, info: SourceInfo): Slot[] {
   if (info.kind === 'pdf') return info.pages.map((_, page) => ({ id: newId('s'), sourceId, page, enabled: true }));
   return [{ id: newId('s'), sourceId, page: 0, enabled: true, raster: defaultLayout(info.raster) }];
+}
+
+/**
+ * What a generation actually uses: the enabled slots, in order, and only the fields placed on them.
+ * The summary, the pre-generation checks and the job are all built from this, so they always agree.
+ */
+export function activeComposition(slots: Slot[], fields: Field[]): { slots: Slot[]; fields: Field[] } {
+  const enabled = slots.filter((s) => s.enabled);
+  if (!fields.length) return { slots: enabled, fields: [] };
+  const ids = new Set(enabled.map((s) => s.id));
+  return { slots: enabled, fields: fields.filter((f) => ids.has(f.slot)) };
 }
 
 /** Resolves a slot to the page geometry (and image placement) used by editor, preview and output. */

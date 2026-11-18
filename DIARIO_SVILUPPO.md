@@ -374,3 +374,28 @@ Push di `9160c89` autorizzato; workflow Pages 44274059880 riuscito (build e depl
 Richiesta dell'utente: un linguaggio comprensibile anche da chi non conosce ProXDATA o il gergo di stampa. Nei testi per l'utente ora si dice **Grafica** (pulsante della barra, suggerimento del trascinamento), **file grafico** (messaggi, riepilogo, pannello Pagine per record, LEGGIMI dell'archivio) e **pagina grafica** (menu della pagina, guida iniziale). Il pulsante della barra ha un tooltip sintetico: "Carica uno o più file PDF, JPG o PNG da utilizzare come base grafica del documento. Le pagine vengono ripetute per ogni record".
 
 "Velina" resta il termine tecnico: nomi interni (`Velina` come nome della risorsa XObject, `embedTemplatePages`…), commenti, documentazione architetturale, e la cartella `veline/` dell'archivio, che non cambia per compatibilità con i progetti salvati. Nel README la sezione sulla leggerezza del PDF spiega il termine ("nel gergo tipografico la *velina*"). Nessuna modifica a logica, formato o layout; convenzione registrata in AGENTS.md. Test 143/143, build ok, controllo in Chromium: nessuna occorrenza di "velina" visibile nell'interfaccia vuota e con un file caricato.
+
+---
+
+## 2026-11-18: Correzione dei tre problemi del backlog dell'interfaccia
+
+### 1. Falso errore dei generatori su pagine disabilitate (priorità alta)
+
+Causa verificata nel codice: `renderSummary()` passava a `generatorIssue()` tutte le zone, `runGeneration()` solo quelle delle pagine attive; i due percorsi costruivano la selezione ciascuno a modo suo. Soluzione: `activeComposition()` in `src/core/composition.ts` (slot abilitati in ordine + zone su quegli slot) e `generationIssue()` spostato in `src/core/generators.ts` (logica pura, testabile in Node); in `output.ts` `plannedJob()` produce intervallo, pagine e zone sia per il riepilogo sia per la richiesta al worker, e `enabledSlots()` deriva dalla stessa funzione. Il pannello dei generatori continua a segnalare una configurazione errata e il `.dvp.zip` continua a validare tutti i generatori (scelta confermata dalla revisione: l'archivio contiene anche le pagine escluse e deve sempre riaprirsi). Corretto anche "con 1 caratteri" → "con 1 carattere" nel messaggio di capacità.
+
+Test nuovi in `tests/generation-check.test.ts` (10, scritti da un subagente TASK e ricontrollati): generatore valido/non valido su pagina attiva, non valido solo su pagina disabilitata (con la prova che con tutte le zone si avrebbe il falso errore), usato su attiva e disabilitata, disabilitazione e riattivazione, ordine degli slot, fronte/retro con retro disabilitato, database + numerazione + `{#}` con una colonna inesistente solo sul retro (nessun errore, poi errore `Zona "Retro": …` alla riattivazione), `{@Inesistente}` in zona attiva, stessi valori per indice assoluto con e senza retro.
+
+### 2. Barra di caricamento non raggiungibile da tastiera
+
+Causa: `<label class="btn">` con `<input type="file" hidden>` dentro. Soluzione solo HTML/CSS: l'input file è il controllo reale (visivamente nascosto, focalizzabile, classe `.file-input`) seguito da `<label for>` con l'aspetto di pulsante; focus visibile con `.file-input:focus-visible + label.btn`; emoji `aria-hidden`. Nessun gestore JavaScript nuovo, `main.ts` e il pulsante "＋ Carica database" usano gli stessi input.
+
+### 3. Barra sopra l'anteprima compressa
+
+Causa: una riga flex senza `wrap`, con spaziatori e la didascalia "Anteprima record" che andava su due righe. Soluzione: `flex-wrap`, menu della pagina elastico (150–340 px), blocco `.bar-controls` (navigazione record + zoom) che va a capo intero, container query su `.stage` che sotto 700 px nasconde solo la didascalia (il gruppo ha `aria-label`); `aria-label` ai pulsanti ◀ ▶ − ＋ e al campo del record. Misure: larghezza anteprima 940/588/388/228 px a 1600/1200/960/800 px di finestra, barra alta 42/42/77/110 px (1, 1, 2, 3 righe), nessun elemento fuori dal contenitore né scorrimento orizzontale; il nome dei file nella barra superiore ora si accorcia con "…" invece di spingere i pulsanti.
+
+### Verifiche
+
+- `npm test` 153/153 (143 + 10), `npm run build` ok.
+- Chromium e Firefox (playwright-core, `file://`) con sola tastiera: Tab raggiunge Grafica, Dati, Apri progetto con contorno di focus; Invio e Spazio aprono un solo selettore; annullamento senza effetti, il focus resta sul controllo; caricamento di due file grafici, CSV, `.dvp.zip` e vecchio `.dvp.json` v1; drag & drop di un CSV; riepilogo con retro disabilitato (`120 record × 1 pagina`) e riattivato (errore del generatore), PDF da 120 pagine col retro disabilitato e da 240 pagine fronte/retro, salvataggio e riapertura con valori identici; nessun errore in console. Nota per le prove: il Chromium di Playwright avviato da `file://` blocca i worker in data URL (pdf.js passa al "fake worker", la generazione fallisce con "Errore durante la generazione") se non si passa `--allow-file-access-from-files`; lo stesso build generato nel Chromium gestito dall'harness, senza flag, funziona: è una restrizione di quell'avvio, non un difetto dell'app.
+- WebKit: la build di Playwright presente non corrisponde alla versione di `playwright-core` e non si avvia; Safari e gli annunci reali degli screen reader restano non verificati.
+- Revisione indipendente GPT-6.1 Sol High (subagente `council-sol`, Advisor disattivato): nessun problema bloccante; accolta la nota di efficienza (`activeComposition` non costruisce il `Set` senza zone); confermato che l'archivio debba continuare a validare tutti i generatori.

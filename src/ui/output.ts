@@ -1,23 +1,23 @@
 import GenerateWorker from '../worker?worker&inline';
 import type { WorkerMessage, WorkerRequest } from '../worker';
 import { revealSection, setSectionAlert, setSectionMeta } from './sections';
-import { generatorProblem, referencedGenerators, uniqueMaxRecords } from '../core/generators';
-import type { Field } from '../core/types';
+import { activeComposition } from '../core/composition';
+import { generationIssue } from '../core/generators';
+import type { Field, Slot } from '../core/types';
 import { $, download, errorMessage, formatBytes, h, toast } from './dom';
 import { enabledSlots, jobSources, notify, on, recordCount, recordRange, slotPage, state } from './state';
 
-/** Problem of a generator used by the fields, checked before generating `count` records (absolute). */
-function generatorIssue(fields: Field[], count: number): string | null {
-  const used = new Set(fields.flatMap((f) => referencedGenerators(f.content).map((n) => n.toLowerCase())));
-  for (const g of state.generators) {
-    if (!used.has(g.name.toLowerCase())) continue;
-    const problem = generatorProblem(g);
-    if (problem) return `Generatore "${g.name}": ${problem}`;
-    if (g.type === 'unique' && count > uniqueMaxRecords(g)) {
-      return `Generatore "${g.name}": servono ${count} codici ma con ${g.length} caratteri se ne possono usare al massimo ${uniqueMaxRecords(g)}: aumenta la lunghezza`;
-    }
-  }
-  return null;
+/**
+ * What "Crea PDF" would generate now, or the reason it cannot (thrown, Italian). The summary and
+ * runGeneration both call this: same pages, same fields, same checks.
+ */
+function plannedJob(): { from: number; to: number; slots: Slot[]; fields: Field[] } {
+  const { from, to } = recordRange();
+  const { slots, fields } = activeComposition(state.slots, state.fields);
+  if (!slots.length) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
+  const issue = generationIssue(state.generators, fields, to + 1);
+  if (issue) throw new Error(issue);
+  return { from, to, slots, fields };
 }
 
 const panel = $('#output-panel');
@@ -85,11 +85,8 @@ function renderSummary(): void {
     el.classList.remove('error');
   } else {
     try {
-      const { from, to } = recordRange();
-      const perRecord = enabledSlots().length;
-      if (!perRecord) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
-      const issue = generatorIssue(state.fields, to + 1);
-      if (issue) throw new Error(issue);
+      const { from, to, slots } = plannedJob();
+      const perRecord = slots.length;
       const records = to - from + 1;
       pages = `${records * perRecord} ${records * perRecord === 1 ? 'pagina' : 'pagine'}`;
       const partial = records < recordCount() ? ` (record ${from + 1}–${to + 1} di ${recordCount()})` : '';
@@ -124,15 +121,9 @@ async function runGeneration(): Promise<void> {
   revealSection('output');
   let request: WorkerRequest;
   try {
-    const { from, to } = recordRange();
-    const pages = enabledSlots().map(slotPage);
-    if (!pages.length) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
-    const used = new Set(pages.map((p) => p.slot));
-    const fields = state.fields.filter((f) => used.has(f.slot));
-    const issue = generatorIssue(fields, to + 1);
-    if (issue) throw new Error(issue);
+    const { from, to, slots, fields } = plannedJob();
     // The instant of "date of generation" generators: taken once, here, for the whole PDF.
-    request = { sources: jobSources(), pages, fields, fonts: state.fonts, data: state.data, generators: state.generators, now: Date.now(), from, to };
+    request = { sources: jobSources(), pages: slots.map(slotPage), fields, fonts: state.fonts, data: state.data, generators: state.generators, now: Date.now(), from, to };
   } catch (e) {
     return toast(errorMessage(e), 'error');
   }

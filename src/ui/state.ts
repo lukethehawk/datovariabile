@@ -1,5 +1,5 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { jobPage, newId, type SourceInfo } from '../core/composition';
+import { activeComposition, jobPage, newId, type SourceInfo } from '../core/composition';
 import { toDataSet, type RawTable } from '../core/data';
 import type { JobPage, JobSource } from '../core/generate';
 import type { BarcodeField, DataGenerator, DataSet, Field, FontAsset, Slot, SourceFile, TextField } from '../core/types';
@@ -92,7 +92,7 @@ export function slotPage(slot: Slot): JobPage {
   return jobPage(slot, sourceOf(slot).info);
 }
 
-export const enabledSlots = () => state.slots.filter((s) => s.enabled);
+export const enabledSlots = () => activeComposition(state.slots, []).slots;
 
 /** Sources for the worker: only the files used by enabled slots. */
 export function jobSources(): JobSource[] {

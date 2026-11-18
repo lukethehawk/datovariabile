@@ -9,10 +9,15 @@
   <body>
     <header class="toolbar">
       <div class="brand">Dato<span>Variabile</span></div>
-      <label class="btn" title="Carica uno o più file PDF, JPG o PNG da utilizzare come base grafica del documento. Le pagine vengono ripetute per ogni record (più file = più pagine, es. fronte e retro).">📄 Grafica<input id="in-template" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple hidden /></label>
-      <label class="btn" title="Excel, CSV o TXT con i dati variabili">📊 Dati<input id="in-data" type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.txt" hidden /></label>
+      <!-- File pickers: the real <input type="file"> is the keyboard control (Tab, Enter, Space), visually
+           hidden but focusable; its <label> is the visible button and gives the accessible name. -->
+      <input id="in-template" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple title="Carica uno o più file PDF, JPG o PNG da utilizzare come base grafica del documento. Le pagine vengono ripetute per ogni record (più file = più pagine, es. fronte e retro)." />
+      <label for="in-template" class="btn" title="Carica uno o più file PDF, JPG o PNG da utilizzare come base grafica del documento. Le pagine vengono ripetute per ogni record (più file = più pagine, es. fronte e retro)."><span aria-hidden="true">📄</span> Grafica</label>
+      <input id="in-data" class="file-input" type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.txt" title="Excel, CSV o TXT con i dati variabili" />
+      <label for="in-data" class="btn" title="Excel, CSV o TXT con i dati variabili"><span aria-hidden="true">📊</span> Dati</label>
       <span class="sep"></span>
-      <label class="btn" title="Apri un progetto salvato (.dvp.zip, oppure .dvp.json delle versioni precedenti)">📂 Apri progetto<input id="in-project" type="file" accept=".zip,.json" hidden /></label>
+      <input id="in-project" class="file-input" type="file" accept=".zip,.json" title="Apri un progetto salvato (.dvp.zip, oppure .dvp.json delle versioni precedenti)" />
+      <label for="in-project" class="btn" title="Apri un progetto salvato (.dvp.zip, oppure .dvp.json delle versioni precedenti)"><span aria-hidden="true">📂</span> Apri progetto</label>
       <button id="btn-save" class="btn" type="button" title="Salva in un unico file .dvp.zip file grafici, dati, zone, impostazioni e font (contiene anche i dati importati)">💾 Salva progetto</button>
       <span id="template-name" class="muted"></span>
       <span class="spacer"></span>
@@ -38,17 +43,21 @@
 
       <section class="stage">
         <div class="stage-bar">
-          <select id="page-select" title="Pagina grafica da modificare"></select>
-          <span class="spacer"></span>
-          <span class="muted">Anteprima record</span>
-          <button id="record-prev" class="btn icon" type="button" title="Record precedente">◀</button>
-          <input id="record-input" type="number" min="1" value="1" />
-          <span id="record-total" class="muted"></span>
-          <button id="record-next" class="btn icon" type="button" title="Record successivo">▶</button>
-          <span class="spacer"></span>
-          <button id="zoom-out" class="btn icon" type="button" title="Riduci (Ctrl+rotellina)">−</button>
-          <button id="zoom-fit" class="btn" type="button" title="Adatta alla finestra"><span id="zoom-label">100%</span></button>
-          <button id="zoom-in" class="btn icon" type="button" title="Ingrandisci (Ctrl+rotellina)">＋</button>
+          <select id="page-select" title="Pagina grafica da modificare" aria-label="Pagina grafica da modificare"></select>
+          <div class="bar-controls">
+            <div class="bar-group" role="group" aria-label="Anteprima record">
+              <span class="muted bar-label" aria-hidden="true">Anteprima record</span>
+              <button id="record-prev" class="btn icon" type="button" title="Record precedente" aria-label="Record precedente">◀</button>
+              <input id="record-input" type="number" min="1" value="1" aria-label="Record in anteprima" />
+              <span id="record-total" class="muted"></span>
+              <button id="record-next" class="btn icon" type="button" title="Record successivo" aria-label="Record successivo">▶</button>
+            </div>
+            <div class="bar-group" role="group" aria-label="Zoom">
+              <button id="zoom-out" class="btn icon" type="button" title="Riduci (Ctrl+rotellina)" aria-label="Riduci">−</button>
+              <button id="zoom-fit" class="btn" type="button" title="Adatta alla finestra"><span id="zoom-label">100%</span></button>
+              <button id="zoom-in" class="btn icon" type="button" title="Ingrandisci (Ctrl+rotellina)" aria-label="Ingrandisci">＋</button>
+            </div>
+          </div>
         </div>
         <div id="viewport" class="viewport">
           <div id="empty" class="empty">

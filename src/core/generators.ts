@@ -13,7 +13,7 @@
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { generatorToken, PLACEHOLDER } from './placeholders';
-import type { DataGenerator, DateFormat, DateTimeGenerator, NumberingGenerator, UniqueGenerator } from './types';
+import type { DataGenerator, DateFormat, DateTimeGenerator, Field, NumberingGenerator, UniqueGenerator } from './types';
 
 export const DEFAULT_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 export const UNIQUE_ALPHABETS = {
@@ -380,6 +380,25 @@ export function generatorProblem(g: DataGenerator): string | null {
     return null;
   }
   return 'tipo di generatore sconosciuto';
+}
+
+/**
+ * Why the current PDF cannot be generated because of a generator, or null. Only the generators
+ * written in `fields` count: pass the fields of the enabled pages (activeComposition), so a broken
+ * generator used only on excluded pages does not block. `count` = records up to the last one generated
+ * (absolute), because unique codes are always drawn from record 0.
+ */
+export function generationIssue(generators: DataGenerator[], fields: Field[], count: number): string | null {
+  const used = new Set(fields.flatMap((f) => referencedGenerators(f.content).map((n) => n.toLowerCase())));
+  for (const g of generators) {
+    if (!used.has(g.name.toLowerCase())) continue;
+    const problem = generatorProblem(g);
+    if (problem) return `Generatore "${g.name}": ${problem}`;
+    if (g.type === 'unique' && count > uniqueMaxRecords(g)) {
+      return `Generatore "${g.name}": servono ${count} codici ma con ${g.length} ${g.length === 1 ? 'carattere' : 'caratteri'} se ne possono usare al massimo ${uniqueMaxRecords(g)}: aumenta la lunghezza`;
+    }
+  }
+  return null;
 }
 
 /** First values for the panel (records 0…n-1); errors are shown instead of values. */
