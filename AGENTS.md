@@ -145,6 +145,14 @@ docs/FORMATO_PROGETTO.md   specifica del formato .dvp.zip v4 e dei generatori (l
 
 ## Backlog noto
 
+Problemi noti dell'interfaccia (segnalati dalla revisione del 2026-11-18, in ordine di priorità):
+
+1. **Falso errore dei generatori su pagine disabilitate (priorità alta).** Il riepilogo di GENERAZIONE PDF (`renderSummary()` in `output.ts`) passa a `generatorIssue()` **tutte** le zone (`state.fields`), mentre `runGeneration()` usa solo quelle degli slot abilitati. Un generatore usato solo su una pagina esclusa (es. codice univoco troppo corto) mostra un errore e un ⚠ sulla sezione, anche se la generazione funzionerebbe. Correzione prevista: stesso insieme di zone nei due percorsi (zone degli `enabledSlots()`), con una prova nel browser.
+2. **Barra di caricamento non raggiungibile da tastiera.** "📄 Velina", "📊 Dati" e "📂 Apri progetto" sono `<label>` con `input` nascosto: con Tab non si raggiungono. Il database ha già un'alternativa accessibile (`＋ Carica database`, pulsante che apre `#in-data`); per velina e progetto usare lo stesso schema (pulsante nativo che chiama `input.click()`).
+3. **Barra sopra l'anteprima compressa a finestre strette** (circa 960 px): menu della pagina, campo del record e zoom si schiacciano. Serve un layout che vada a capo o nasconda le etichette.
+
+Funzionalità e altro:
+
 - Modulo di imposizione (N pose per foglio, crocini di taglio): non presente.
 - Anteprima con profili ICC (qcms di pdf.js) compatibile col single-file; copia degli `/OutputIntents` delle veline PDF.
 - Deduplicazione di risorse identiche fra PDF diversi (misurare prima su veline reali: guadagno incerto con font subsettati).

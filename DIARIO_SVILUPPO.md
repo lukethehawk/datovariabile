@@ -357,8 +357,12 @@ Solo interfaccia: la colonna destra aveva Dati / Generatori di dati / Crea PDF, 
 - Firefox da `file://` con lo stesso flusso: tutto ok, nessun errore.
 - Revisione indipendente GPT-6.1 Sol High (sola lettura). Corretti: conteggio record non aggiornato se i dati cambiano durante una generazione (ora `syncControls()` aggiorna riga record e limiti senza staccare avanzamento/risultato, verificato caricando un CSV durante una generazione di 8.000 pagine); risultato/errore nascosto se la sezione viene chiusa durante il lavoro (riapertura a fine lavoro); errori dei generatori troncati (ora vanno a capo); tooltip non raggiungibili col puntatore e non chiudibili (corretti); testo sui font impreciso per gli OTF CFF (corretto).
 
-### Problemi preesistenti segnalati, non modificati
+### Problemi preesistenti segnalati, non modificati (ora nel backlog di AGENTS.md, in quest'ordine)
 
-- Pulsanti "Velina" e "Apri progetto" della barra sono `<label>` con input nascosto: non raggiungibili con Tab.
-- Il riepilogo controlla la capacità dei generatori su tutte le zone, la generazione solo su quelle delle pagine attive: un generatore usato solo su una pagina esclusa può dare un falso errore nel riepilogo.
-- A finestre strette (≈ 960 px) la barra sopra l'anteprima (pagina, record, zoom) è compressa.
+1. Il riepilogo controlla la capacità dei generatori su tutte le zone, la generazione solo su quelle delle pagine attive: un generatore usato solo su una pagina esclusa può dare un falso errore nel riepilogo. **Priorità alta.**
+2. Pulsanti "Velina", "Dati" e "Apri progetto" della barra sono `<label>` con input nascosto: non raggiungibili con Tab.
+3. A finestre strette (≈ 960 px) la barra sopra l'anteprima (pagina, record, zoom) è compressa.
+
+### Pubblicazione
+
+Push di `9160c89` autorizzato; workflow Pages 44274059880 riuscito (build e deploy). Smoke test sul sito pubblicato (Chromium): sezioni iniziali aperta/aperta/chiusa, 30 record manuali + 3 generatori, CSV da 60 righe ("Record disponibili"), zone su fronte e retro, font, salvataggio e riapertura (stessi esempi, database, font, 3 zone), rimozione del database (tornano 30 record, generatori intatti), PDF da 120 pagine con 60 codici distinti uguali su fronte e retro; nessun errore in console, nessuno scorrimento orizzontale.
