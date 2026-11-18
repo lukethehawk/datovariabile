@@ -106,7 +106,7 @@ async function migrateV1(p: ProjectFileV1): Promise<{ project: ProjectData; warn
   const warnings: string[] = [];
   const fonts = p.fonts.map((f) => ({ name: f.name, bytes: fromBase64(f.data) }));
   if (!p.template) {
-    return { project: { sources: [], slots: [], fields: [], fonts, manualCount: p.manualCount, data: null, range: NO_RANGE, generators: [] }, warnings: p.fields.length ? ['Il progetto non contiene la velina: zone non recuperabili'] : [] };
+    return { project: { sources: [], slots: [], fields: [], fonts, manualCount: p.manualCount, data: null, range: NO_RANGE, generators: [] }, warnings: p.fields.length ? ['Il progetto non contiene il file grafico: zone non recuperabili'] : [] };
   }
   const bytes = fromBase64(p.template.data);
   const pageCount = (await inspectTemplate(bytes)).length;
@@ -123,7 +123,7 @@ async function migrateV1(p: ProjectFileV1): Promise<{ project: ProjectData; warn
   for (const old of p.fields) {
     const { page, ...rest } = old;
     if (page < 0 || page >= pageCount) {
-      warnings.push(`Zona "${old.name}": la pagina ${page + 1} non esiste più nella velina, zona rimossa`);
+      warnings.push(`Zona "${old.name}": la pagina ${page + 1} non esiste più nel file grafico, zona rimossa`);
       continue;
     }
     let targets = slots.filter((s) => s.page === page);
@@ -145,11 +145,11 @@ export function parsePages(spec: string, pageCount: number): number[] {
   const out: number[] = [];
   for (const part of spec.split(/[,;\s]+/).filter(Boolean)) {
     const m = /^(\d+)(?:-(\d+))?$/.exec(part);
-    if (!m) throw new Error(`Pagine velina: "${part}" non valido`);
+    if (!m) throw new Error(`Pagine della grafica: "${part}" non valido`);
     const a = Number(m[1]);
     const b = m[2] ? Number(m[2]) : a;
     for (let q = Math.min(a, b); q <= Math.max(a, b); q++) {
-      if (q < 1 || q > pageCount) throw new Error(`Pagine velina: la pagina ${q} non esiste`);
+      if (q < 1 || q > pageCount) throw new Error(`Pagine della grafica: la pagina ${q} non esiste`);
       out.push(q - 1);
     }
   }

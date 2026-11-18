@@ -1,6 +1,6 @@
 # DatoVariabile
 
-Dato variabile su PDF, gratis e senza installazione: carichi una o più **veline** (file PDF, JPG o PNG), posizioni le **zone** (testi, contatori, codici a barre, QR) e importi un file **Excel, CSV o TXT**. Ottieni un PDF multipagina pronto per la stampa: ogni record occupa una pagina, oppure più pagine se la composizione ne prevede più di una (es. fronte e retro).
+Dato variabile su PDF, gratis e senza installazione: carichi uno o più **file grafici** (PDF, JPG o PNG), posizioni le **zone** (testi, contatori, codici a barre, QR) e importi un file **Excel, CSV o TXT**. Ottieni un PDF multipagina pronto per la stampa: ogni record occupa una pagina, oppure più pagine se la composizione ne prevede più di una (es. fronte e retro).
 
 **Usalo online:** <https://lukethehawk.github.io/datovariabile/>
 
@@ -8,11 +8,11 @@ Tutto avviene nel browser: i file non vengono caricati su nessun server.
 
 ## Perché il PDF resta leggero
 
-Ogni pagina di velina e ogni immagine viene inclusa **una sola volta** come oggetto riutilizzabile, richiamato da tutte le pagine del PDF che lo usano; ogni pagina aggiunge solo il proprio testo e i propri codici. Vale anche con più file (fronte e retro): non è una concatenazione di copie.
+Ogni pagina grafica (nel gergo tipografico la *velina*, cioè la base ripetuta per ogni record) e ogni immagine viene inclusa **una sola volta** come oggetto riutilizzabile, richiamato da tutte le pagine del PDF che lo usano; ogni pagina aggiunge solo il proprio testo e i propri codici. Vale anche con più file (fronte e retro): non è una concatenazione di copie.
 
 Le immagini non vengono ricompresse: i JPEG entrano nel PDF con i dati originali, i PNG senza perdita (la trasparenza è conservata). Il file cresce solo per il testo e i codici di ogni record:
 
-| Esempio (misurato) | Veline | PDF generato |
+| Esempio (misurato) | File grafici | PDF generato |
 | --- | --- | --- |
 | 1000 pagine con un testo variabile | 1 PDF, 375 KB | 619 KB (≈ 250 byte per pagina) |
 | 1000 pagine con QR Code | 1 PDF, 375 KB | 1,1 MB (≈ 800 byte per pagina) |
@@ -24,7 +24,7 @@ I font standard (Helvetica, Times, Courier) non vengono incorporati; un font TTF
 
 ## Come si usa
 
-1. **Velina**: uno o più file PDF, JPG o PNG da ripetere per ogni record. Ogni file caricato aggiunge le sue pagine in fondo alla composizione, che gestisci nel pannello **Pagine per record** (colonna sinistra). Dei PDF vengono conservati TrimBox, BleedBox e rotazione.
+1. **Grafica**: uno o più file grafici PDF, JPG o PNG, da ripetere per ogni record. Ogni file caricato aggiunge le sue pagine in fondo alla composizione, che gestisci nel pannello **Pagine per record** (colonna sinistra). Dei PDF vengono conservati TrimBox, BleedBox e rotazione.
 2. **Dati** (facoltativo): `.xlsx`, `.xls`, `.ods`, `.csv`, `.txt`, dal pulsante **Dati** della barra o da **＋ Carica database** nella sezione **Dati variabili** (colonna destra). Il separatore (`;` `,` tab `|`) e la codifica (UTF-8 o Windows-1252 di Excel) sono riconosciuti in automatico. Un `.txt` senza separatori è letto come un valore per riga. I valori di Excel appaiono come formattati nel foglio; le date in formato breve diventano `gg/mm/aaaa`.
 3. **Zone**: "＋ Testo" o "＋ Codice / QR", poi trascina e ridimensiona sulla pagina. Nel contenuto scrivi testo fisso e segnaposto:
    - `{Nome colonna}` → valore della colonna per quel record (clicca i nomi delle colonne per inserirli);
@@ -49,9 +49,9 @@ La composizione si gestisce nel pannello **Pagine per record** (colonna sinistra
 
 Carica `fronte.pdf` e `retro.pdf` (oppure `fronte.jpg` e `retro.pdf`): con 100 righe di dati ottieni un PDF di 200 pagine, nell'ordine fronte 1, retro 1, fronte 2, retro 2, … Se serve, riordina le pagine nel pannello **Pagine per record**.
 
-### Immagini JPG e PNG come velina
+### Immagini JPG e PNG come grafica
 
-Un JPG o PNG può essere una velina come un PDF. Per ogni pagina immagine scegli:
+Un JPG o PNG può fare da file grafico come un PDF. Per ogni pagina immagine scegli:
 
 - **Formato pagina**: **Dimensione reale (DPI)** usa i DPI scritti nel file quando sono almeno 150, altrimenti A4; oppure A3, A4, A5 o **Personalizzato** in millimetri.
 
@@ -66,9 +66,9 @@ Accanto alle impostazioni vedi la risoluzione di stampa effettiva, con un avviso
 
 Senza dati e senza zone, con **Record da generare** impostato a 1 (predefinito), **Crea PDF** produce un PDF con le immagini, nell'ordine della composizione.
 
-Trascinando i file sulla finestra: PDF/JPG/PNG = velina, Excel/CSV/TXT = dati, TTF/OTF = font, `.dvp.zip`/`.json` = progetto.
+Trascinando i file sulla finestra: PDF/JPG/PNG = grafica, Excel/CSV/TXT = dati, TTF/OTF = font, `.dvp.zip`/`.json` = progetto.
 
-**Salva progetto** crea un unico file `NomeProgetto.dvp.zip` (il nome del progetto aperto, altrimenti quello della prima velina) con: le veline originali (PDF, JPG o PNG, non modificate e ognuna una sola volta), il file dati originale (Excel, CSV o TXT), una copia dei dati usati, i font caricati, i generatori di dati (compresa la chiave dei codici univoci) e tutte le impostazioni, cioè pagine e loro ordine, impostazioni delle immagini, zone, contatori, intervallo di record e numero di record senza dati. Riaprendolo con **Apri progetto** ritrovi tutto com'era al salvataggio, compreso il foglio Excel scelto e l'indicazione delle intestazioni: non serve ricaricare i dati.
+**Salva progetto** crea un unico file `NomeProgetto.dvp.zip` (il nome del progetto aperto, altrimenti quello del primo file grafico) con: i file grafici originali (PDF, JPG o PNG, non modificati e ognuno una sola volta), il file dati originale (Excel, CSV o TXT), una copia dei dati usati, i font caricati, i generatori di dati (compresa la chiave dei codici univoci) e tutte le impostazioni, cioè pagine e loro ordine, impostazioni delle immagini, zone, contatori, intervallo di record e numero di record senza dati. Riaprendolo con **Apri progetto** ritrovi tutto com'era al salvataggio, compreso il foglio Excel scelto e l'indicazione delle intestazioni: non serve ricaricare i dati.
 
 ### Cosa c'è nel file .dvp.zip
 
@@ -76,7 +76,7 @@ Trascinando i file sulla finestra: PDF/JPG/PNG = velina, Excel/CSV/TXT = dati, T
 
 - `progetto.json`: tutte le impostazioni, con i riferimenti agli altri file;
 - `LEGGIMI.txt`: queste spiegazioni, in breve;
-- `veline/`: i file di partenza (PDF, JPG, PNG) così come li hai caricati;
+- `veline/`: i file grafici (PDF, JPG, PNG) così come li hai caricati (la cartella mantiene il nome tecnico per compatibilità con i progetti già salvati);
 - `dati/`: il file dati originale (`dati/originale-...`) e i dati usati `dati/dati-usati.csv` (UTF-8, separatore `;`, prima riga = intestazioni se attive);
 - `font/`: i font caricati.
 
@@ -144,7 +144,7 @@ Richiede Node.js 24.
 ```sh
 npm ci
 npm run dev      # server di sviluppo
-npm test         # test (generazione PDF, più veline, immagini JPEG/PNG, progetti, lettura dati)
+npm test         # test (generazione PDF, più file grafici, immagini JPEG/PNG, progetti, lettura dati)
 npm run build    # dist/index.html, file unico
 ```
 
@@ -162,9 +162,9 @@ Per chi sviluppa (anche agenti AI): [AGENTS.md](AGENTS.md) contiene la memoria d
 
 ## Limiti attuali
 
-- Il progetto (`.dvp.zip`) si può salvare e aprire fino a 512 MB (veline, dati e font compresi) e con al massimo 5 milioni di celle di dati: oltre, il salvataggio si ferma con un messaggio invece di creare un file che non si riaprirebbe.
+- Il progetto (`.dvp.zip`) si può salvare e aprire fino a 512 MB (file grafici, dati e font compresi) e con al massimo 5 milioni di celle di dati: oltre, il salvataggio si ferma con un messaggio invece di creare un file che non si riaprirebbe.
 - Nessun modulo di imposizione (più pose per foglio): ogni record occupa una pagina o più, quante sono le pagine della composizione.
-- I PDF velina non devono essere protetti da password.
+- I PDF usati come grafica non devono essere protetti da password.
 - JPEG: solo 8 bit standard o progressivi (non 12 bit, lossless o aritmetici).
 - I PNG molto grandi con trasparenza o interlacciati (oltre ~400 MB di pixel non compressi) non sono elaborabili nel browser.
 - Un generatore con lo stesso nome di una colonna dei dati che inizia con `@` (per esempio generatore `Codice` e colonna `@Codice`) blocca la generazione finché non rinomini il generatore.

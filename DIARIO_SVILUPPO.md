@@ -366,3 +366,11 @@ Solo interfaccia: la colonna destra aveva Dati / Generatori di dati / Crea PDF, 
 ### Pubblicazione
 
 Push di `9160c89` autorizzato; workflow Pages 44274059880 riuscito (build e deploy). Smoke test sul sito pubblicato (Chromium): sezioni iniziali aperta/aperta/chiusa, 30 record manuali + 3 generatori, CSV da 60 righe ("Record disponibili"), zone su fronte e retro, font, salvataggio e riapertura (stessi esempi, database, font, 3 zone), rimozione del database (tornano 30 record, generatori intatti), PDF da 120 pagine con 60 codici distinti uguali su fronte e retro; nessun errore in console, nessuno scorrimento orizzontale.
+
+---
+
+## 2026-11-18: Terminologia più semplice: "Grafica" al posto di "velina" nell'interfaccia
+
+Richiesta dell'utente: un linguaggio comprensibile anche da chi non conosce ProXDATA o il gergo di stampa. Nei testi per l'utente ora si dice **Grafica** (pulsante della barra, suggerimento del trascinamento), **file grafico** (messaggi, riepilogo, pannello Pagine per record, LEGGIMI dell'archivio) e **pagina grafica** (menu della pagina, guida iniziale). Il pulsante della barra ha un tooltip sintetico: "Carica uno o più file PDF, JPG o PNG da utilizzare come base grafica del documento. Le pagine vengono ripetute per ogni record".
+
+"Velina" resta il termine tecnico: nomi interni (`Velina` come nome della risorsa XObject, `embedTemplatePages`…), commenti, documentazione architetturale, e la cartella `veline/` dell'archivio, che non cambia per compatibilità con i progetti salvati. Nel README la sezione sulla leggerezza del PDF spiega il termine ("nel gergo tipografico la *velina*"). Nessuna modifica a logica, formato o layout; convenzione registrata in AGENTS.md. Test 143/143, build ok, controllo in Chromium: nessuna occorrenza di "velina" visibile nell'interfaccia vuota e con un file caricato.

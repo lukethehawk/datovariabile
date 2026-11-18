@@ -81,7 +81,7 @@ function renderSummary(): void {
   let problem: string | null = null;
   let pages = '';
   if (!state.slots.length) {
-    el.textContent = 'Carica una velina (PDF, JPG o PNG) per iniziare.';
+    el.textContent = 'Carica un file grafico (PDF, JPG o PNG) per iniziare.';
     el.classList.remove('error');
   } else {
     try {
@@ -119,7 +119,7 @@ async function runGeneration(): Promise<void> {
     toast('Generazione annullata');
     return;
   }
-  if (!state.slots.length) return toast('Carica prima una velina (PDF, JPG o PNG)', 'error');
+  if (!state.slots.length) return toast('Carica prima un file grafico (PDF, JPG o PNG)', 'error');
   // Progress, result and warnings live in this section: make sure they are visible.
   revealSection('output');
   let request: WorkerRequest;
@@ -171,7 +171,7 @@ async function runGeneration(): Promise<void> {
     const seconds = ((performance.now() - started) / 1000).toFixed(1);
     download(msg.bytes, name, 'application/pdf');
     result.replaceChildren(
-      h('p', { class: 'ok' }, `✔ ${name}: ${msg.pageCount} pagine, ${formatBytes(msg.bytes.length)} (veline ${formatBytes(sourceBytes)}) in ${seconds} s`),
+      h('p', { class: 'ok' }, `✔ ${name}: ${msg.pageCount} pagine, ${formatBytes(msg.bytes.length)} (file grafici ${formatBytes(sourceBytes)}) in ${seconds} s`),
       h('button', { type: 'button', class: 'btn small', onclick: () => download(msg.bytes, name, 'application/pdf') }, 'Scarica di nuovo'),
       msg.warnings.length
         ? h('details', { class: 'warnings', open: true }, h('summary', {}, `${msg.warnings.length} avvisi`), h('ul', {}, ...msg.warnings.map((w) => h('li', {}, w))))

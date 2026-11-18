@@ -83,7 +83,7 @@ export async function loadTemplate(bytes: Uint8Array): Promise<PDFDocument> {
     return await PDFDocument.load(bytes, { updateMetadata: false });
   } catch (e) {
     if (e instanceof EncryptedPDFError) {
-      throw new Error('Il PDF è protetto da password: rimuovi la protezione prima di usarlo come velina');
+      throw new Error('Il PDF è protetto da password: rimuovi la protezione prima di usarlo come grafica');
     }
     throw e;
   }
@@ -211,7 +211,7 @@ async function embedBackgrounds(doc: PDFDocument, sources: JobSource[], pages: J
   const result = new Map<string, Background>();
   for (const [id, indices] of used) {
     const src = sources.find((s) => s.id === id);
-    if (!src) throw new Error('Composizione non valida: file della pagina mancante');
+    if (!src) throw new Error('Composizione non valida: file grafico mancante');
     try {
       if (src.kind === 'pdf') {
         for (const [index, bg] of embedTemplatePages(doc, await loadTemplate(src.bytes), [...indices])) result.set(`${id}:${index}`, bg);

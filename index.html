@@ -9,11 +9,11 @@
   <body>
     <header class="toolbar">
       <div class="brand">Dato<span>Variabile</span></div>
-      <label class="btn" title="PDF, JPG o PNG da usare come velina; più file = più pagine per record (es. fronte e retro)">📄 Velina<input id="in-template" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple hidden /></label>
+      <label class="btn" title="Carica uno o più file PDF, JPG o PNG da utilizzare come base grafica del documento. Le pagine vengono ripetute per ogni record (più file = più pagine, es. fronte e retro).">📄 Grafica<input id="in-template" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple hidden /></label>
       <label class="btn" title="Excel, CSV o TXT con i dati variabili">📊 Dati<input id="in-data" type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.txt" hidden /></label>
       <span class="sep"></span>
       <label class="btn" title="Apri un progetto salvato (.dvp.zip, oppure .dvp.json delle versioni precedenti)">📂 Apri progetto<input id="in-project" type="file" accept=".zip,.json" hidden /></label>
-      <button id="btn-save" class="btn" type="button" title="Salva in un unico file .dvp.zip veline, dati, zone, impostazioni e font (contiene anche i dati importati)">💾 Salva progetto</button>
+      <button id="btn-save" class="btn" type="button" title="Salva in un unico file .dvp.zip file grafici, dati, zone, impostazioni e font (contiene anche i dati importati)">💾 Salva progetto</button>
       <span id="template-name" class="muted"></span>
       <span class="spacer"></span>
       <button id="btn-generate" class="btn primary" type="button">Crea PDF</button>
@@ -38,7 +38,7 @@
 
       <section class="stage">
         <div class="stage-bar">
-          <select id="page-select" title="Pagina della velina"></select>
+          <select id="page-select" title="Pagina grafica da modificare"></select>
           <span class="spacer"></span>
           <span class="muted">Anteprima record</span>
           <button id="record-prev" class="btn icon" type="button" title="Record precedente">◀</button>
@@ -53,13 +53,13 @@
         <div id="viewport" class="viewport">
           <div id="empty" class="empty">
             <div>
-              <h1>Trascina qui la velina (PDF, JPG o PNG)</h1>
+              <h1>Trascina qui il file grafico (PDF, JPG o PNG)</h1>
               <p>poi il file dati (Excel, CSV o TXT), oppure un progetto salvato.</p>
               <ol>
-                <li>Carica una o più <b>veline</b>: PDF o immagini. Più file = più pagine per record (es. fronte e retro).</li>
+                <li>Carica uno o più <b>file grafici</b>: PDF o immagini. Più file = più pagine per record (es. fronte e retro).</li>
                 <li>Carica i <b>dati</b> (facoltativo per i soli contatori o per un PDF da immagini).</li>
                 <li>Aggiungi le <b>zone</b> di testo o codice su ogni pagina e posizionale.</li>
-                <li><b>Crea PDF</b>: ogni velina è inclusa una sola volta, il file resta leggero.</li>
+                <li><b>Crea PDF</b>: ogni pagina grafica è inclusa una sola volta, il file resta leggero.</li>
               </ol>
             </div>
           </div>
@@ -125,7 +125,7 @@
       </aside>
     </main>
     <div id="toast" class="toast"></div>
-    <div class="drop-hint">Rilascia i file: PDF/JPG/PNG = velina · Excel/CSV/TXT = dati · TTF/OTF = font · .dvp.zip/.json = progetto</div>
+    <div class="drop-hint">Rilascia i file: PDF/JPG/PNG = grafica · Excel/CSV/TXT = dati · TTF/OTF = font · .dvp.zip/.json = progetto</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

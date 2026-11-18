@@ -66,7 +66,7 @@ const README = `DatoVariabile - progetto salvato
 Questo archivio contiene tutto il lavoro: aprilo con "Apri progetto" in DatoVariabile.
 
 progetto.json         impostazioni: pagine, zone, contatori, intervallo, riferimenti ai file
-veline/               i file PDF, JPG e PNG originali, non modificati
+veline/               i file grafici originali (PDF, JPG e PNG), non modificati
 dati/originale-...    il file dati originale (Excel, CSV o TXT), non modificato
 dati/dati-usati.csv   i dati effettivamente usati: UTF-8, separatore ";", prima riga = intestazioni se attive
 font/                 i font caricati
@@ -304,8 +304,8 @@ function checkManifest(raw: unknown, zip: ZipArchive): ProjectManifest {
 
   const sourceIds = new Set<string>();
   const sources = list(raw.sources, 'veline').map((s, i) => {
-    if (!isObj(s) || !isStr(s.id) || !isStr(s.name) || !['pdf', 'jpeg', 'png'].includes(s.kind as string)) throw new Error(`velina ${i + 1} non valida`);
-    if (sourceIds.has(s.id)) throw new Error(`velina duplicata: ${s.id}`);
+    if (!isObj(s) || !isStr(s.id) || !isStr(s.name) || !['pdf', 'jpeg', 'png'].includes(s.kind as string)) throw new Error(`file grafico ${i + 1} non valido`);
+    if (sourceIds.has(s.id)) throw new Error(`file grafico duplicato: ${s.id}`);
     sourceIds.add(s.id);
     return { id: s.id, name: s.name, kind: s.kind as SourceKind, file: ref(s.file, s.name) };
   });

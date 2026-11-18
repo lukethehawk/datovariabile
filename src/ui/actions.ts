@@ -49,7 +49,7 @@ const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.e
  */
 export async function addSource(name: string, bytes: Uint8Array): Promise<string> {
   const kind = sourceKind(name);
-  if (!kind) throw new Error(`Formato non supportato come velina: ${name}`);
+  if (!kind) throw new Error(`Formato non supportato come file grafico: ${name}`);
   let source = state.sources.find((s) => sameBytes(s.bytes, bytes));
   if (!source) {
     try {

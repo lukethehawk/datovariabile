@@ -130,6 +130,7 @@ docs/FORMATO_PROGETTO.md   specifica del formato .dvp.zip v4 e dei generatori (l
 
 ## Convenzioni
 
+- **Terminologia**: nei testi per l'utente (interfaccia, messaggi, README) si dice **Grafica** (pulsanti, intestazioni), **file grafico** (PDF/JPG/PNG caricato), **pagina grafica** (singola pagina). "Velina" resta il termine tecnico in codice, commenti, nomi interni, documentazione architetturale e nel nome della cartella `veline/` dell'archivio (compatibilità: non rinominarla). Termini dell'interfaccia da mantenere: "Pagine per record", "Zona", "Dati variabili", "Generatori", "Generazione PDF".
 - Logica nuova che non tocca il DOM va in `src/core/` ed è testabile in Node.
 - Niente framework UI: DOM vanilla con `h()`. Niente nuove dipendenze se basta poco codice.
 - Unità interne in punti; l'interfaccia mostra millimetri (`MM = 72/25.4`).
@@ -148,7 +149,7 @@ docs/FORMATO_PROGETTO.md   specifica del formato .dvp.zip v4 e dei generatori (l
 Problemi noti dell'interfaccia (segnalati dalla revisione del 2026-11-18, in ordine di priorità):
 
 1. **Falso errore dei generatori su pagine disabilitate (priorità alta).** Il riepilogo di GENERAZIONE PDF (`renderSummary()` in `output.ts`) passa a `generatorIssue()` **tutte** le zone (`state.fields`), mentre `runGeneration()` usa solo quelle degli slot abilitati. Un generatore usato solo su una pagina esclusa (es. codice univoco troppo corto) mostra un errore e un ⚠ sulla sezione, anche se la generazione funzionerebbe. Correzione prevista: stesso insieme di zone nei due percorsi (zone degli `enabledSlots()`), con una prova nel browser.
-2. **Barra di caricamento non raggiungibile da tastiera.** "📄 Velina", "📊 Dati" e "📂 Apri progetto" sono `<label>` con `input` nascosto: con Tab non si raggiungono. Il database ha già un'alternativa accessibile (`＋ Carica database`, pulsante che apre `#in-data`); per velina e progetto usare lo stesso schema (pulsante nativo che chiama `input.click()`).
+2. **Barra di caricamento non raggiungibile da tastiera.** "📄 Grafica", "📊 Dati" e "📂 Apri progetto" sono `<label>` con `input` nascosto: con Tab non si raggiungono. Il database ha già un'alternativa accessibile (`＋ Carica database`, pulsante che apre `#in-data`); per grafica e progetto usare lo stesso schema (pulsante nativo che chiama `input.click()`).
 3. **Barra sopra l'anteprima compressa a finestre strette** (circa 960 px): menu della pagina, campo del record e zoom si schiacciano. Serve un layout che vada a capo o nasconda le etichette.
 
 Funzionalità e altro:

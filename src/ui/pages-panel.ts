@@ -232,7 +232,7 @@ function rasterSettings(slot: Slot): HTMLElement | null {
 
 function render(): void {
   if (!state.sources.length) {
-    panel.replaceChildren(h('p', { class: 'muted hint' }, 'Carica uno o più file PDF, JPG o PNG: ogni pagina diventa una pagina del record (es. fronte e retro). Puoi riordinarle, ripeterle ed escluderle.'));
+    panel.replaceChildren(h('p', { class: 'muted hint' }, 'Carica uno o più file grafici (PDF, JPG o PNG): ogni pagina diventa una pagina del record (es. fronte e retro). Puoi riordinarle, ripeterle ed escluderle.'));
     return;
   }
   const slot = currentSlot();
@@ -245,7 +245,7 @@ function render(): void {
     h('p', { class: 'muted small' }, `${perRecord} ${perRecord === 1 ? 'pagina' : 'pagine'} per record, in quest’ordine.`),
     addPageRow(),
     (slot && rasterSettings(slot)) ?? '',
-    h('details', { class: 'files-box' }, h('summary', { class: 'small' }, `File caricati (${state.sources.length})`), filesList()),
+    h('details', { class: 'files-box' }, h('summary', { class: 'small' }, `File grafici caricati (${state.sources.length})`), filesList()),
   );
 }
 
