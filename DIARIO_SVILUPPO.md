@@ -434,3 +434,43 @@ Valutate due strade: un nuovo tipo di sorgente `blank` oppure un PDF vuoto creat
 ### Limiti
 
 Le misure si scelgono alla creazione: per cambiarle si crea una nuova pagina vuota (un editor delle dimensioni potrà essere valutato a parte). La pagina vuota appare nell'elenco con estensione `.pdf` perché è a tutti gli effetti un PDF salvato nel progetto.
+
+## 2026-11-19: Filtri sui segnaposto, dialogo ƒx Trasforma e formato progetto v5
+
+### Obiettivo
+
+Trasformare i valori direttamente nei segnaposto (es. DataMatrix `{@Codice}` e testo con le ultime 4 cifre `{@Codice|digits|right:4}`) con una sintassi unica, verificabile prima della generazione, più un dialogo guidato per chi non vuole scrivere la formula. Specifica approvata da Luca: `docs/SPECIFICA_FILTRI.md`.
+
+### Decisioni (Council Opus 5.5 High + Sol High, 7 round)
+
+- **Un solo parser** (`parseContent`) per anteprima, generazione, riferimenti, rinomina dei generatori, protezione dall'eliminazione e dialogo: niente più regex sparse. Graffe letterali raddoppiate `{{ }}`; il segnaposto finisce alla prima `}` fuori dalle virgolette, così gli argomenti tra virgolette possono contenere graffe (JSON nei QR).
+- **Nomi**: virgole ammesse nei nomi semplici (Luca); nomi speciali tra virgolette `{"Peso {kg}"}`; `{@Nome}` è sempre un generatore e `{#}` il contatore, una colonna con quei caratteri si scrive `{"@Nome"}`/`{"#Lotto"}`. I nomi dei generatori sono sempre semplici.
+- **13 filtri** con nomi inglesi ed etichette italiane nel dialogo; `group` rimandato alla fase 2, `json` nel backlog.
+- **Unicode**: conteggio per code point; un taglio che spezzerebbe un grafema (accento separato, emoji composte) è un errore esplicito (`Intl.Segmenter`), non un taglio silenzioso.
+- **Valori vuoti**: `prefix`/`suffix`/`padleft`/`padright` lasciano vuoto un valore vuoto (Luca). Limite noto: `FT-{Codice}` con Codice vuoto stampa `FT-` e il controllo dei codici vuoti non lo intercetta.
+- **Zone codice vuote = errore** con precontrollo su tutti i record prima di generare; le zone testo possono essere vuote.
+- **Avviso non bloccante** quando un filtro riduce un codice univoco (riepilogo, riga Valore, dialogo).
+- **Formato v5 senza migrazione** (Luca: l'app non è mai stata usata in produzione): rimossi `project.ts`, la lettura `.dvp.json` e le versioni 1–4.
+
+### Implementazione
+
+- Commit motore: `placeholders.ts` riscritto (scanner manuale, posizioni degli errori in caratteri, `columnRef`, `contentProblem`, `compileContent` con parsing e controllo dei filtri una sola volta per job), nuovo `filters.ts` (tabella, limiti 32 filtri/10.000 interi/4.096 testo/65.536 valore), `generators.ts` sul parser, `checkEmptyCodes` in `generate.ts`, `archive.ts` solo v5.
+- Commit interfaccia: `value-preview.ts` (stesso compilatore del PDF sul record in anteprima, generatori in cache fino al record corrente), `transform-dialog.ts` (`<dialog>` nativo: valore di partenza, passaggi ordinati ↑ ↓ ✕, anteprima originale/risultato/formula, modifica del segnaposto sotto il cursore o inserimento), riga "Valore (record N)" con `aria-live`, guida con esempi dei 13 filtri, README.
+
+### Misure e prestazioni
+
+- 10.000 record: resolver 0,3 ms senza filtri, 4,8 ms con `trim|upper|right:4|padleft:6:0`; `generate()` 5,0–5,6 s in entrambi i casi (il costo resta pdf-lib/BWIPP).
+- Chromium da `file://`: pagina 50×30, 1000 record, DataMatrix `{@Codice}` (lettere e cifre, 12) + testo `{@Codice|digits|right:4}` → 1000 pagine, 775 KB, 2,2 s.
+- **Decodifica indipendente** dei 1000 DataMatrix (pdf.js + ZXing in una cartella temporanea, fuori dal repo): 1000 codici distinti, testo = ultime 4 cifre del codice decodificato su tutte le pagine. ZXing in modalità "pure barcode" sbaglia la lettura di alcune pagine a una data scala di rendering (pagina 9 a 6×, 668 a 5×, 4 pagine a 7×) e le legge correttamente alle altre: nessuna discordanza su un codice letto.
+
+### Test e verifiche
+
+- Nuovi `tests/content-parser.test.ts`, `tests/filters.test.ts`, `tests/filters-integration.test.ts` (subagenti TASK, un file ciascuno; DataMatrix + `digits|right:4` su 1000 record con stream identici a una generazione con contenuto letterale, ristampa parziale, codici vuoti, archivio v5); aggiornati archive, blank-page, csv, generators. `npm test` 251/251, build ok.
+- Chromium e Firefox (playwright-core, `file://`): dialogo ƒx da tastiera (crea, modifica, Esc), pulsanti colonna con nomi tra virgolette, riga Valore, errore dei codici vuoti, salva/riapri v5 con contenuti e valori identici; nessun errore in console.
+- Revisione Sol High (`council-sol`), corretti: il dialogo andava in errore su un segnaposto con filtro sconosciuto o argomenti sbagliati (ora propone l'inserimento e mostra il problema); limite di 65.536 caratteri applicato anche ai segnaposto senza filtri e dopo `upper`/`lower`; un a capo ai bordi di un nome semplice veniva tolto in silenzio; la riga Valore estraeva i codici univoci per l'intera tiratura (falso errore di capacità nelle ristampe parziali); Annulla/Esc ora riportano al campo Contenuto con la selezione di prima; README ripulito dalle istruzioni sui vecchi progetti.
+
+### Limiti e lavoro rimasto
+
+- `FT-{Codice}` con Codice vuoto non è intercettato dal controllo dei codici vuoti (documentato).
+- Fase 2: filtro `group`; backlog: filtro `json` per valori dentro un JSON nei QR.
+- Non pubblicato: due commit locali, push in attesa di autorizzazione.

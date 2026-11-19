@@ -27,11 +27,12 @@ I font standard (Helvetica, Times, Courier) non vengono incorporati; un font TTF
 1. **Grafica**: uno o più file grafici PDF, JPG o PNG, da ripetere per ogni record. Ogni file caricato aggiunge le sue pagine in fondo alla composizione, che gestisci nel pannello **Pagine per record** (colonna sinistra). Dei PDF vengono conservati TrimBox, BleedBox e rotazione.
 2. **Dati** (facoltativo): `.xlsx`, `.xls`, `.ods`, `.csv`, `.txt`, dal pulsante **Dati** della barra o da **＋ Carica database** nella sezione **Dati variabili** (colonna destra). Il separatore (`;` `,` tab `|`) e la codifica (UTF-8 o Windows-1252 di Excel) sono riconosciuti in automatico. Un `.txt` senza separatori è letto come un valore per riga. I valori di Excel appaiono come formattati nel foglio; le date in formato breve diventano `gg/mm/aaaa`.
 3. **Zone**: "＋ Testo" o "＋ Codice / QR", poi trascina e ridimensiona sulla pagina. Nel contenuto scrivi testo fisso e segnaposto:
-   - `{Nome colonna}` → valore della colonna per quel record (clicca i nomi delle colonne per inserirli);
+   - `{Nome colonna}` → valore della colonna per quel record (clicca i nomi delle colonne per inserirli); un nome con caratteri speciali si scrive tra virgolette: `{"Peso {kg}"}`, `{"#"}`, `{"@Nome"}` (i pulsanti delle colonne lo fanno da soli);
    - `{#}` → contatore, con inizio, passo e cifre (zeri iniziali) configurabili;
-   - `{@Nome}` → valore di un generatore di dati (vedi [Generatori di dati](#generatori-di-dati-con-o-senza-excel)).
+   - `{@Nome}` → valore di un generatore di dati (vedi [Generatori di dati](#generatori-di-dati-con-o-senza-excel));
+   - filtri dopo `|` per trasformare il valore, es. `{@Codice|right:4}` (vedi [Trasformare i valori](#trasformare-i-valori-filtri)).
 
-   Esempio: `Biglietto N. {#} - {Nome} {Cognome}`.
+   Esempio: `Biglietto N. {#} - {Nome} {Cognome}`. Per stampare una graffa scrivila due volte: `{{` e `}}` (`{{{Nome}}}` stampa il valore tra graffe). Una graffa sola senza chiusura è un errore, segnalato con la posizione.
 4. **Anteprima**: la pagina mostra il risultato reale del record scelto (frecce ◀ ▶ o clic su una riga della tabella dati). Con più pagine per record scegli la pagina da modificare nel pannello **Pagine per record** o nel menu sopra l'anteprima.
 5. **Crea PDF** (pulsante in alto a destra). Le impostazioni sono nella sezione **Generazione PDF**: tutti i record oppure un intervallo (utile per le ristampe: il contatore resta quello del record originale) e il riepilogo delle pagine. Con un file dati il numero di record è quello delle righe (**Record disponibili**); senza dati lo imposti in **Record da generare** (predefinito 1; es. 500 per una numerazione 1–500).
 
@@ -74,7 +75,7 @@ Accanto alle impostazioni vedi la risoluzione di stampa effettiva, con un avviso
 
 Senza dati e senza zone, con **Record da generare** impostato a 1 (predefinito), **Crea PDF** produce un PDF con le immagini, nell'ordine della composizione.
 
-Trascinando i file sulla finestra: PDF/JPG/PNG = grafica, Excel/CSV/TXT = dati, TTF/OTF = font, `.dvp.zip`/`.json` = progetto.
+Trascinando i file sulla finestra: PDF/JPG/PNG = grafica, Excel/CSV/TXT = dati, TTF/OTF = font, `.dvp.zip` = progetto.
 
 **Salva progetto** crea un unico file `NomeProgetto.dvp.zip` (il nome del progetto aperto, altrimenti quello del primo file grafico) con: i file grafici originali (PDF, JPG o PNG, non modificati e ognuno una sola volta), il file dati originale (Excel, CSV o TXT), una copia dei dati usati, i font caricati, i generatori di dati (compresa la chiave dei codici univoci) e tutte le impostazioni, cioè pagine e loro ordine, impostazioni delle immagini, zone, contatori, intervallo di record e numero di record senza dati. Riaprendolo con **Apri progetto** ritrovi tutto com'era al salvataggio, compreso il foglio Excel scelto e l'indicazione delle intestazioni: non serve ricaricare i dati.
 
@@ -94,7 +95,7 @@ Attenzione: se apri il CSV con Excel, Excel può trasformare alcuni valori (per 
 
 **Privacy.** Il file contiene anche i dati importati (nomi, indirizzi, codici…): condividilo solo con chi è autorizzato a vederli. Tutto resta sul tuo PC, nessun file viene caricato online.
 
-**Progetti delle versioni precedenti.** I file `.dvp.json` si aprono ancora con **Apri progetto**. Non contenevano i dati: se le zone usano colonne compare un avviso, quindi carica il file dati e salva di nuovo, ottenendo il nuovo `.dvp.zip`.
+**Formato.** Il `.dvp.zip` versione 5 è il primo formato stabile: i file delle versioni sperimentali precedenti (`.dvp.json` e `.dvp.zip` fino alla versione 4) non si aprono più.
 
 ### Profili colore
 
@@ -141,6 +142,34 @@ Qualche esempio:
 - 5000 ticket: Codice univoco sul fronte e lo stesso `{@Codice}` dentro un QR sul retro.
 - 500 etichette "Prodotto il …": Data/Ora del momento di creazione nel testo `Prodotto il {@Data}`.
 
+### Trasformare i valori (filtri)
+
+Un segnaposto può trasformare il proprio valore con uno o più filtri, applicati da sinistra a destra: `{Sorgente|filtro:argomento|filtro}`. Il dato originale non cambia: `{@Codice}` in un DataMatrix resta completo anche se accanto un testo usa `{@Codice|right:4}`. Stesso risultato in testo, QR, DataMatrix e codici a barre, in anteprima, nel PDF e nelle ristampe.
+
+Il modo più semplice: seleziona la zona, metti il cursore sul segnaposto e clicca **ƒx Trasforma**. Scegli il valore di partenza e aggiungi le trasformazioni (in italiano), vedi subito il risultato sul record corrente e applica. Sotto il contenuto la riga **Valore (record N)** mostra il testo esatto che verrà stampato o codificato.
+
+| Filtro | Nel menu ƒx | Esempio | Risultato |
+| --- | --- | --- | --- |
+| `left:N` | Primi caratteri | `{Codice\|left:3}` su `ABC123` | `ABC` |
+| `right:N` | Ultimi caratteri | `{@Codice\|right:4}` su `FT2026A001234` | `1234` |
+| `mid:DA:QUANTI` | Caratteri da una posizione | `{Codice\|mid:4:3}` su `ABC123456` | `123` |
+| `digits` | Solo cifre | `{Codice\|digits}` su `AB-12-CD34` | `1234` |
+| `upper` / `lower` | Tutto maiuscolo / minuscolo | `{Nome\|upper}` | `MARIO` |
+| `trim` | Togli spazi ai bordi | `{Nome\|trim}` su `  Mario ` | `Mario` |
+| `nospace` | Togli tutti gli spazi | `{Codice\|nospace}` su `AB 12` | `AB12` |
+| `replace:"A":"B"` | Sostituisci testo | `{Codice\|replace:"-":""}` su `AB-12` | `AB12` |
+| `prefix:"T"` / `suffix:"T"` | Aggiungi testo prima / dopo | `{Lotto\|prefix:"L-"}` | `L-27` |
+| `padleft:N:C` / `padright:N:C` | Completa a sinistra / destra | `{Matricola\|padleft:8:0}` su `125` | `00000125` |
+
+- Catene: `{@Codice|digits|right:4}` prende le ultime 4 **cifre** (con `AB12CD34` dà `1234`, mentre `right:4` darebbe `CD34`).
+- Un valore vuoto resta vuoto anche con `prefix`, `suffix`, `padleft` e `padright`: una cella vuota non diventa `00000000` né `FT-`. Il testo scritto fuori dal segnaposto invece si stampa sempre (`FT-{Codice}` con `Codice` vuoto stampa `FT-`).
+- Un QR, DataMatrix o codice a barre con contenuto vuoto blocca la generazione e indica i record da correggere; un testo vuoto no.
+- Accorciare un codice univoco (`right`, `left`, `digits`…) mostra un avviso: il risultato potrebbe ripetersi su più record.
+- Gli argomenti di testo vanno tra virgolette (`"FT-"`, `""`); dentro le virgolette `{ } | :` sono caratteri normali. Per il riempimento basta il carattere: `padleft:6:0`.
+- Per un JSON in un QR raddoppia le graffe del JSON: `{{"id":"{Codice}"}}`.
+
+Specifica completa: [docs/SPECIFICA_FILTRI.md](docs/SPECIFICA_FILTRI.md).
+
 ## Uso offline
 
 La build produce un unico file `index.html` che funziona anche aperto con doppio clic, senza internet: dalla pagina online usa "Salva pagina con nome" (pagina web, solo HTML), oppure esegui la build in locale.
@@ -160,7 +189,7 @@ A ogni push su `main` GitHub Actions esegue test e build e pubblica su GitHub Pa
 
 Struttura:
 
-- `src/core/`: logica senza interfaccia: generazione PDF con pdf-lib (`generate.ts`), composizione delle pagine (`composition.ts`), immagini JPEG/PNG senza perdita (`raster.ts`), salvataggio e apertura del progetto `.dvp.zip` (`archive.ts`, `zip.ts`, `data.ts`) e conversione dei vecchi progetti (`project.ts`), lettura dati, segnaposto, impaginazione testo, codici a barre vettoriali;
+- `src/core/`: logica senza interfaccia: generazione PDF con pdf-lib (`generate.ts`), composizione delle pagine (`composition.ts`), immagini JPEG/PNG senza perdita (`raster.ts`), salvataggio e apertura del progetto `.dvp.zip` (`archive.ts`, `zip.ts`, `data.ts`), lettura dati, segnaposto e filtri (`placeholders.ts`, `filters.ts`), impaginazione testo, codici a barre vettoriali;
 - `src/ui/`: interfaccia (anteprima con pdf.js, pannello delle pagine, editor delle zone, pannelli);
 - `src/worker.ts`: la generazione gira in un Web Worker, l'interfaccia resta reattiva e si può annullare; lo stesso worker prepara l'anteprima delle pagine immagine.
 
@@ -175,7 +204,7 @@ Per chi sviluppa (anche agenti AI): [AGENTS.md](AGENTS.md) contiene la memoria d
 - I PDF usati come grafica non devono essere protetti da password.
 - JPEG: solo 8 bit standard o progressivi (non 12 bit, lossless o aritmetici).
 - I PNG molto grandi con trasparenza o interlacciati (oltre ~400 MB di pixel non compressi) non sono elaborabili nel browser.
-- Un generatore con lo stesso nome di una colonna dei dati che inizia con `@` (per esempio generatore `Codice` e colonna `@Codice`) blocca la generazione finché non rinomini il generatore.
+- Una colonna il cui nome inizia con `@` o `#` si scrive tra virgolette (`{"@Codice"}`, `{"#Lotto"}`): `{@Codice}` è sempre un generatore e `{#}` il contatore.
 - I progetti salvati con i generatori richiedono questa versione dell'app.
 - L'anteprima non applica i profili colore ICC; il PDF finale sì.
 - Immagini animate: viene usato solo il primo fotogramma.

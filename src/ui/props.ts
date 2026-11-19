@@ -1,15 +1,64 @@
 import { SYMBOLOGIES } from '../core/barcode';
 import { STANDARD_FONTS } from '../core/fonts';
+import { FILTERS } from '../core/filters';
 import { columnRef } from '../core/placeholders';
 import type { BarcodeField, ColorSpec, Field, Rotation, TextField } from '../core/types';
 import { $, h } from './dom';
 import { cloneField, createField, currentSlot, MM, notify, on, selectedField, state } from './state';
+import { openTransformDialog } from './transform-dialog';
+import { previewValue } from './value-preview';
 
 const listEl = $('#field-list');
 const propsEl = $('#props');
 
 /** Inputs to refresh when the field changes elsewhere (drag, arrow keys). */
 let syncers: Array<() => void> = [];
+
+/** Refreshes the "Valore (record N)" line of the selected zone (content edits, record change). */
+let refreshValue: (() => void) | null = null;
+
+/** "Valore (record N): …": the exact text that will be printed or encoded, or the error. */
+function valueLine(f: Field): HTMLElement {
+  const label = h('span', { class: 'muted' });
+  const value = h('code', {});
+  const warning = h('span', { class: 'value-warn' });
+  const line = h('p', { class: 'value-line small', 'aria-live': 'polite' }, label, value, warning);
+  refreshValue = () => {
+    const r = previewValue(f.content, f.counter);
+    label.textContent = `Valore (record ${state.record + 1}): `;
+    value.textContent = r.error ?? (r.value === '' ? '(vuoto)' : r.value);
+    line.classList.toggle('error', r.error !== null);
+    warning.textContent = r.warning ? ` ⚠ ${r.warning}` : '';
+  };
+  refreshValue();
+  return line;
+}
+
+/** Short reference of the syntax and of the filters, with copyable examples. */
+function syntaxGuide(): HTMLElement {
+  const examples: Record<string, string> = {
+    left: '{Codice|left:3}',
+    right: '{@Codice|right:4}',
+    mid: '{Codice|mid:4:3}',
+    digits: '{Codice|digits}',
+    upper: '{Nome|upper}',
+    lower: '{Nome|lower}',
+    trim: '{Nome|trim}',
+    nospace: '{Codice|nospace}',
+    replace: '{Codice|replace:"-":""}',
+    prefix: '{Lotto|prefix:"L-"}',
+    suffix: '{Lotto|suffix:"-MI"}',
+    padleft: '{Matricola|padleft:8:0}',
+    padright: '{Codice|padright:8:"*"}',
+  };
+  return h('details', { class: 'syntax-guide small' },
+    h('summary', {}, 'Guida: segnaposto, filtri e graffe'),
+    h('p', {}, 'Segnaposto: {Colonna} per i dati, {#} per il contatore della zona, {@Nome} per un generatore. Un nome con caratteri speciali va tra virgolette: {"Peso {kg}"}, {"@Nome"}.'),
+    h('p', {}, 'Filtri dopo |, applicati in ordine: {@Codice|digits|right:4} = ultime 4 cifre. Testi tra virgolette ("FT-"). Un valore vuoto resta vuoto anche con prefix, suffix, padleft e padright.'),
+    h('p', {}, 'Graffe nel testo: scrivile due volte, {{ e }}. {{{Nome}}} stampa il valore tra graffe; un JSON in un QR: {{"id":"{Codice}"}}.'),
+    h('ul', {}, ...Object.entries(FILTERS).map(([name, def]) => h('li', {}, h('code', {}, examples[name]), ` ${def.label}`))),
+  );
+}
 
 function renderList(): void {
   const pageNo = (f: Field) => state.slots.findIndex((s) => s.id === f.slot) + 1;
@@ -194,6 +243,7 @@ function columnPicker(f: Field, target: HTMLTextAreaElement | HTMLInputElement):
 
 function renderProps(): void {
   syncers = [];
+  refreshValue = null;
   const f = selectedField();
   if (!f) {
     propsEl.replaceChildren(
@@ -238,8 +288,17 @@ function renderProps(): void {
     ),
     h('fieldset', {}, h('legend', {}, 'Contenuto'),
       content,
+      h('div', { class: 'content-tools' },
+        h('button', {
+          type: 'button',
+          class: 'btn small',
+          title: 'Trasforma il segnaposto sotto il cursore (o inseriscine uno nuovo) con filtri guidati',
+          onclick: () => openTransformDialog(f, content, changed),
+        }, 'ƒx Trasforma'),
+      ),
+      valueLine(f),
       columnPicker(f, content),
-      h('p', { class: 'muted small' }, 'Testo fisso e segnaposto: {Colonna} per i dati, {#} per il contatore della zona, {@Nome} per un generatore di dati. Esempio: N. {#} - {Nome} {Cognome}'),
+      syntaxGuide(),
     ),
     h('fieldset', {}, h('legend', {}, 'Contatore {#}'),
       h('div', { class: 'grid3' },
@@ -323,6 +382,8 @@ export function initProps(): void {
   on(['fields', 'selection', 'composition'], renderList);
   on(['selection', 'fonts', 'data', 'composition', 'generators'], renderProps);
   on(['fields', 'geometry'], () => syncers.forEach((s) => s()));
+  // The value depends on the content (fields) and on the preview record (view).
+  on(['fields', 'view'], () => refreshValue?.());
   const add = (type: Field['type']) => {
     const slot = currentSlot();
     if (!slot) return;

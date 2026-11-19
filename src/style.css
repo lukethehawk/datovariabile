@@ -798,6 +798,139 @@ label.check {
   margin-top: 6px;
 }
 
+/* "ƒx Trasforma": same look as the blank page dialog, a little wider for the chain of filters. */
+.fx-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.2);
+}
+
+.fx-dialog::backdrop {
+  background: rgb(0 0 0 / 0.25);
+}
+
+.fx-dialog select,
+.fx-dialog input {
+  min-width: 0;
+}
+
+.fx-chain {
+  margin: 8px 0;
+}
+
+.fx-steps {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.fx-steps > li:not(.fx-empty) {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.fx-step-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fx-step-head select {
+  flex: 1;
+}
+
+.fx-args {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+}
+
+.fx-arg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+  flex: 1 1 120px;
+}
+
+.fx-arg input {
+  width: 100%;
+  color: var(--text);
+}
+
+.fx-preview {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f8f9fa;
+}
+
+.fx-preview p {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.fx-value,
+.fx-formula {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 12px;
+}
+
+/* Content tools of a zone: ƒx button, value of the current record, syntax guide. */
+.content-tools {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.value-line {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.value-line code {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+}
+
+.value-line.error code {
+  color: var(--danger);
+}
+
+.value-warn {
+  color: #9a5b00;
+}
+
+.syntax-guide {
+  margin-top: 6px;
+}
+
+.syntax-guide summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.syntax-guide p {
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.syntax-guide ul {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+
+.syntax-guide code {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+}
+
 #composition fieldset.raster {
   border: 1px solid var(--border);
   border-radius: 6px;
