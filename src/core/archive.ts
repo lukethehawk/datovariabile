@@ -1,7 +1,8 @@
 /**
- * Project archive, format version 3: a standard ZIP (`Nome.dvp.zip`) holding the
- * manifest `progetto.json`, the original background files, the original data file,
- * the imported table as CSV and the uploaded fonts. Specification: docs/FORMATO_PROGETTO.md.
+ * Project archive, format version 5 (the first stable format; earlier experimental versions are not
+ * read): a standard ZIP (`Nome.dvp.zip`) holding the manifest `progetto.json`, the original background
+ * files, the original data file, the imported table as CSV and the uploaded fonts. Zone contents use
+ * the placeholder grammar of docs/SPECIFICA_FILTRI.md. Specification: docs/FORMATO_PROGETTO.md.
  *
  * Authority on reopening: the manifest plus `dati/dati-usati.csv` (the cells the app
  * imported, header row included) and the column names written in the manifest. The
@@ -11,19 +12,49 @@
  */
 import { SYMBOLOGIES } from './barcode';
 import { crc32Async } from './crc32';
-import { MAX_PROJECT_CELLS, parseProjectCsv, readTable, toDataSet, writeProjectCsv } from './data';
+import { MAX_PROJECT_CELLS, parseProjectCsv, readTable, toDataSet, writeProjectCsv, type RawTable } from './data';
 import { STANDARD_FONTS } from './fonts';
 import { generatorProblem, nameProblem } from './generators';
-import { parseProject, type OpenedProject, type ProjectData, type SavedData } from './project';
-import type { DataGenerator, Field, RasterLayout, Slot, SourceKind } from './types';
+import type { DataGenerator, Field, FontAsset, RasterLayout, Slot, SourceFile, SourceKind } from './types';
 import { isSafePath, isZip, openZip, writeZip, ZipError, type ZipArchive, type ZipInput } from './zip';
 
-/** Version written; version 3 (no generators) is still read. */
-export const FORMAT_VERSION = 4;
+/** The only version written and read. */
+export const FORMAT_VERSION = 5;
 export const MANIFEST = 'progetto.json';
 export const TABLE_PATH = 'dati/dati-usati.csv';
 const README_PATH = 'LEGGIMI.txt';
 const MAX_MANIFEST = 4 * 1024 * 1024;
+
+/** The data file of a project and how it was read. */
+export interface SavedData {
+  /** Original file name and bytes, unchanged (re-read only to switch sheet). */
+  name: string;
+  original: Uint8Array;
+  /** Imported cells (header row included) as used by the app: authoritative on reopening. */
+  table: RawTable;
+  header: boolean;
+  /** Effective column names (blank → letter, duplicates → _2), not recomputed on reopening. */
+  columns: string[];
+}
+
+/** Everything a project saves and restores. */
+export interface ProjectData {
+  sources: SourceFile[];
+  slots: Slot[];
+  fields: Field[];
+  fonts: FontAsset[];
+  manualCount: number;
+  data: SavedData | null;
+  /** Record range as typed in the output panel (1-based, empty = all). */
+  range: { from: string; to: string };
+  /** Data generators ({@Nome}). */
+  generators: DataGenerator[];
+}
+
+export interface OpenedProject {
+  project: ProjectData;
+  warnings: string[];
+}
 
 export interface FileRef {
   /** Relative path inside the archive. */
@@ -34,7 +65,7 @@ export interface FileRef {
 
 export interface ProjectManifest {
   app: 'DatoVariabile';
-  version: 4;
+  version: 5;
   /** ISO date of the save, informative. */
   savedAt: string;
   sources: Array<{ id: string; name: string; kind: SourceKind; file: FileRef }>;
@@ -56,7 +87,7 @@ export interface ProjectManifest {
     /** Effective column names used by the {Colonna} placeholders. */
     columns: string[];
   };
-  /** Data generators ({@Nome}); version 3 manifests have none. See docs/FORMATO_PROGETTO.md §8. */
+  /** Data generators ({@Nome}). See docs/FORMATO_PROGETTO.md §8. */
   generators: DataGenerator[];
 }
 
@@ -144,7 +175,7 @@ export async function writeProjectArchive(p: ProjectData, when = new Date()): Pr
   }
   const manifest: ProjectManifest = {
     app: 'DatoVariabile',
-    version: 4,
+    version: 5,
     savedAt: when.toISOString(),
     sources,
     slots: p.slots,
@@ -166,26 +197,9 @@ export async function writeProjectArchive(p: ProjectData, when = new Date()): Pr
 
 // ---------------------------------------------------------------- open
 
-/** Opens a project file: .dvp.zip (v3) or legacy .dvp.json (v1/v2), recognised by content. */
+/** Opens a project file (.dvp.zip, format version 5). */
 export async function readProjectFile(bytes: Uint8Array): Promise<OpenedProject> {
-  if (isZip(bytes)) return readProjectArchive(bytes);
-  let text: string;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '').trimStart();
-  } catch {
-    text = '';
-  }
-  if (!text.startsWith('{')) throw new Error('Il file non è un progetto DatoVariabile (.dvp.zip o .dvp.json)');
-  const opened = await parseProject(text);
-  try {
-    checkFields(opened.project.fields, new Set(opened.project.slots.map((s) => s.id)), new Set(opened.project.fonts.map((f) => f.name)));
-  } catch (e) {
-    throw new Error(`Progetto danneggiato: ${e instanceof Error ? e.message : e}`);
-  }
-  return opened;
-}
-
-async function readProjectArchive(bytes: Uint8Array): Promise<OpenedProject> {
+  if (!isZip(bytes)) throw new Error('Il file non è un progetto DatoVariabile (.dvp.zip)');
   let zip: ZipArchive;
   try {
     zip = openZip(bytes);
@@ -211,11 +225,13 @@ async function readProjectArchive(bytes: Uint8Array): Promise<OpenedProject> {
     const m = checkManifest(raw, zip);
     return await loadResources(m, zip);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.startsWith('Progetto in un formato più recente')) throw e;
-    throw new Error(`Progetto danneggiato o incompleto: ${msg}`);
+    if (e instanceof VersionError) throw e;
+    throw new Error(`Progetto danneggiato o incompleto: ${e instanceof Error ? e.message : e}`);
   }
 }
+
+/** A readable archive of another format version: reported as such, never as "damaged". */
+class VersionError extends Error {}
 
 async function loadResources(m: ProjectManifest, zip: ZipArchive): Promise<OpenedProject> {
   const warnings: string[] = [];
@@ -263,7 +279,6 @@ async function loadResources(m: ProjectManifest, zip: ZipArchive): Promise<Opene
   return {
     project: { sources, slots: m.slots, fields: m.fields, fonts, manualCount: m.manualCount, data, range: m.range, generators: m.generators },
     warnings,
-    legacy: false,
   };
 }
 
@@ -277,13 +292,14 @@ const isStrArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(is
 /** Structural validation: every reference must resolve, inside the archive, exactly once. */
 function checkManifest(raw: unknown, zip: ZipArchive): ProjectManifest {
   if (!isObj(raw) || raw.app !== 'DatoVariabile') throw new Error('progetto.json non appartiene a DatoVariabile');
-  if (raw.version !== 3 && raw.version !== FORMAT_VERSION) {
+  if (raw.version !== FORMAT_VERSION) {
     if (isNum(raw.version) && raw.version > FORMAT_VERSION) {
-      throw new Error(`Progetto in un formato più recente (versione ${raw.version}): aggiorna DatoVariabile`);
+      throw new VersionError(`Progetto in un formato più recente (versione ${raw.version}): aggiorna DatoVariabile`);
     }
+    if (isNum(raw.version)) throw new VersionError(`Progetto in un formato non supportato (versione ${raw.version})`);
     throw new Error(`versione del progetto non valida (${String(raw.version)})`);
   }
-  const generators = raw.version === 3 ? [] : checkGenerators(raw.generators);
+  const generators = checkGenerators(raw.generators);
   const used = new Set<string>();
   /** `editable`: the data CSV may have been changed by the user (checked later against its CRC). */
   const ref = (v: unknown, what: string, editable = false): FileRef => {
@@ -350,7 +366,7 @@ function checkManifest(raw: unknown, zip: ZipArchive): ProjectManifest {
   }
   return {
     app: 'DatoVariabile',
-    version: 4,
+    version: 5,
     savedAt: isStr(raw.savedAt) ? raw.savedAt : '',
     sources,
     slots,
@@ -375,7 +391,7 @@ function checkRaster(r: unknown, i: number): asserts r is RasterLayout {
   if (!ok) throw new Error(`impostazioni della pagina immagine ${i + 1} non valide`);
 }
 
-/** Generators of a version 4 manifest: well-formed, unique ids and names, able to produce values. */
+/** Generators of the manifest: well-formed, unique ids and names, able to produce values. */
 function checkGenerators(v: unknown): DataGenerator[] {
   if (!Array.isArray(v)) throw new Error('elenco dei generatori mancante');
   const ids = new Set<string>();
@@ -395,7 +411,7 @@ function checkGenerators(v: unknown): DataGenerator[] {
  * Every field must be complete and drawable: checked before the current job is replaced,
  * so a damaged project fails on opening instead of breaking preview or generation later.
  */
-export function checkFields(fields: unknown[], slotIds: Set<string>, fontNames: Set<string>): asserts fields is Field[] {
+function checkFields(fields: unknown[], slotIds: Set<string>, fontNames: Set<string>): asserts fields is Field[] {
   const ids = new Set<string>();
   const oneOf = (v: unknown, values: readonly unknown[]) => values.includes(v);
   fields.forEach((f, i) => {

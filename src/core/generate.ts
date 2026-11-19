@@ -139,6 +139,7 @@ export async function generate(job: Job): Promise<JobResult> {
     bySlot.set(f.slot, [...(bySlot.get(f.slot) ?? []), { field: f, resolve }]);
   }
   const total = job.to - job.from + 1;
+  checkEmptyCodes(job, bySlot);
 
   for (let rec = job.from; rec <= job.to; rec++) {
     for (const jp of job.pages) {
@@ -193,6 +194,37 @@ export async function generate(job: Job): Promise<JobResult> {
   job.onProgress?.(total, total);
   const bytes = await doc.save({ useObjectStreams: true, objectsPerTick: 2000 });
   return { bytes, pageCount: doc.getPageCount(), warnings };
+}
+
+const EMPTY_CODES_SHOWN = 10;
+
+/**
+ * A code zone (QR, DataMatrix, barcode) of the generated pages must never resolve to "": it would
+ * silently be missing from the PDF. Checked for all records before drawing, so one run reports the
+ * first records to fix instead of stopping at the first one after most of the work.
+ */
+function checkEmptyCodes(job: Job, bySlot: Map<string, Array<{ field: Field; resolve: (rec: number) => string }>>): void {
+  const slots = new Set(job.pages.map((p) => p.slot));
+  for (const slot of slots) {
+    for (const { field, resolve } of bySlot.get(slot) ?? []) {
+      if (field.type !== 'barcode') continue;
+      const empty: number[] = [];
+      for (let rec = job.from; rec <= job.to; rec++) {
+        let value: string;
+        try {
+          value = resolve(rec);
+        } catch (e) {
+          throw new Error(`Record ${rec + 1}, zona "${field.name}": ${e instanceof Error ? e.message : e}`);
+        }
+        if (value === '') empty.push(rec + 1);
+      }
+      if (empty.length === 1) throw new Error(`Record ${empty[0]}, zona "${field.name}": il contenuto del codice è vuoto`);
+      if (empty.length > 1) {
+        const more = empty.length > EMPTY_CODES_SHOWN ? ` (e altri ${empty.length - EMPTY_CODES_SHOWN})` : '';
+        throw new Error(`Zona "${field.name}": il contenuto del codice è vuoto nei record ${empty.slice(0, EMPTY_CODES_SHOWN).join(', ')}${more}`);
+      }
+    }
+  }
 }
 
 interface Background {

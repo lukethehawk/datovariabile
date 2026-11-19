@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readProjectFile, writeProjectArchive } from '../src/core/archive';
+import { readProjectFile, writeProjectArchive, type ProjectData, type SavedData } from '../src/core/archive';
 import { MAX_PROJECT_CELLS, parseProjectCsv, readTable, toDataSet, writeProjectCsv } from '../src/core/data';
-import type { ProjectData, SavedData } from '../src/core/project';
 import { openZip } from '../src/core/zip';
 
 const utf8 = (s: string) => new TextEncoder().encode(s);

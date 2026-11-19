@@ -517,12 +517,20 @@ describe('nomi dei generatori e segnaposto', () => {
   it('valida i nomi utilizzabili in {@Nome}', () => {
     expect(nameProblem('Lotto')).toBeNull();
     expect(nameProblem('Lotto 1')).toBeNull();
+    // Virgole, due punti, parentesi e spazi interni sono ammessi.
+    expect(nameProblem('Prezzo, €')).toBeNull();
+    expect(nameProblem('Cognome: Nome')).toBeNull();
+    expect(nameProblem('Peso [kg] (netto)')).toBeNull();
     expect(nameProblem('x'.repeat(40))).toBeNull();
     expect(nameProblem('')).toBe('nome vuoto');
     expect(nameProblem('   ')).toBe('nome vuoto');
     expect(nameProblem(' Lotto')).toBe('il nome non può iniziare o finire con uno spazio');
     expect(nameProblem('Lotto ')).toBe('il nome non può iniziare o finire con uno spazio');
-    expect(nameProblem('Lo{tto}')).toBe('il nome non può contenere parentesi graffe');
+    expect(nameProblem('@Lotto')).toBe('il nome non può iniziare con @ o #');
+    expect(nameProblem('#Lotto')).toBe('il nome non può iniziare con @ o #');
+    for (const bad of ['Lo|tto', 'Lo"tto', 'Lo{tto', 'Lotto}', 'Lo\ttto', 'Lo\n tto']) {
+      expect(nameProblem(bad)).toBe('il nome non può contenere { } | " né caratteri di controllo');
+    }
     expect(nameProblem('x'.repeat(41))).toBe('nome troppo lungo (massimo 40 caratteri)');
   });
 
@@ -540,14 +548,24 @@ describe('nomi dei generatori e segnaposto', () => {
   });
 
   it('rinomina nelle zone senza toccare contatore e colonne', () => {
+    // Only the name range changes: spaces and filters inside the placeholder stay byte for byte.
     expect(renameInContent('{#} {@lotto}-{@Lotto2} {Cliente} {@ LOTTO }', 'Lotto', 'Codice')).toBe(
-      '{#} {@Codice}-{@Lotto2} {Cliente} {@Codice}',
+      '{#} {@Codice}-{@Lotto2} {Cliente} {@ Codice }',
     );
     expect(renameInContent('{ @Codice } {@ Codice} {@Altro}', 'codice', 'Nuovo')).toBe(
-      '{@Nuovo} {@Nuovo} {@Altro}',
+      '{ @Nuovo } {@ Nuovo} {@Altro}',
     );
     expect(renameInContent('{@Lotto}', 'lotto', 'Numero')).toBe('{@Numero}');
+    // Case-insensitive match, everything else untouched.
+    expect(renameInContent('{@CODICE} {@codice}', 'Codice', 'Nuovo')).toBe('{@Nuovo} {@Nuovo}');
     expect(renameInContent('{Lotto} {@Lotto}', 'Lotto', 'Codice')).toBe('{Lotto} {@Codice}');
     expect(renameInContent('{@Lotto}', 'Lotto', 'Lotto')).toBe('{@Lotto}');
+    expect(renameInContent('{@Codice|right:4} {@ CODICE |digits|right:4}', 'codice', 'Nuovo')).toBe(
+      '{@Nuovo|right:4} {@ Nuovo |digits|right:4}',
+    );
+    // A lexical error after the placeholder stops the parse, not the rename or the text that follows.
+    expect(renameInContent('{@Codice} {rotto', 'Codice', 'Nuovo')).toBe('{@Nuovo} {rotto');
+    // Argument text is not a reference: it is never renamed.
+    expect(renameInContent('{A|prefix:"{@Codice}"}', 'Codice', 'Nuovo')).toBe('{A|prefix:"{@Codice}"}');
   });
 });

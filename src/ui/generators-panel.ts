@@ -13,6 +13,7 @@ import {
   uniqueCapacity,
   uniqueMaxRecords,
 } from '../core/generators';
+import { parseContent } from '../core/placeholders';
 import type { DataGenerator, DateTimeGenerator, NumberingGenerator, UniqueGenerator } from '../core/types';
 import { $, h, toast } from './dom';
 import { setSectionAlert } from './sections';
@@ -76,6 +77,9 @@ function create(type: DataGenerator['type']): void {
 function remove(g: DataGenerator): void {
   const users = usedBy(g);
   if (users.length) return toast(`"${g.name}" è usato dalle zone: ${users.join(', ')}. Toglilo dalle zone prima di eliminarlo.`, 'error');
+  // A content with unbalanced braces is read only up to the error: it might still use this generator.
+  const unreadable = state.fields.filter((f) => parseContent(f.content).error).map((f) => f.name);
+  if (unreadable.length) return toast(`Prima correggi la formula delle zone: ${unreadable.join(', ')} (potrebbero usare "${g.name}").`, 'error');
   if (g.type === 'unique' && !confirm(`Eliminare "${g.name}"? I suoi codici non saranno più riproducibili.`)) return;
   state.generators = state.generators.filter((x) => x !== g);
   changed();

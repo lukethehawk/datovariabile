@@ -1,10 +1,9 @@
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { describe, expect, it } from 'vitest';
-import { readProjectFile, writeProjectArchive } from '../src/core/archive';
+import { readProjectFile, writeProjectArchive, type ProjectData } from '../src/core/archive';
 import { generate, type Job, type JobPage } from '../src/core/generate';
 import { compileGenerators, UNIQUE_ALPHABETS } from '../src/core/generators';
 import { compileContent } from '../src/core/placeholders';
-import type { ProjectData } from '../src/core/project';
 import type { DataGenerator, DateTimeGenerator, NumberingGenerator, TemplatePage, UniqueGenerator } from '../src/core/types';
 import { openZip, writeZip } from '../src/core/zip';
 import { barcodeField, makePdf, makeTemplate, pdfJob, textField } from './helpers';
@@ -209,26 +208,27 @@ describe('generators in a real generation', () => {
     expect(await texts(res.bytes, 2)).toEqual([`N. 007 ${codes[1]}`]);
   });
 
-  it('refuses an ambiguous generator/column name and still reads @columns without a generator', async () => {
-    const ambiguous = await generate(
-      makeJob({
-        data: { columns: ['@Gift', 'Altro'], rows: [['colonna', 'x']] },
-        fields: [textField({ content: '{@Gift}' })],
-        generators: [uniqueGen({ id: 'u4' })],
-        to: 0,
-      }),
-    ).catch((e: Error) => e);
-    expect(ambiguous).toBeInstanceOf(Error);
-    expect((ambiguous as Error).message).toContain('sia un generatore sia una colonna');
-
-    // A column literally named "@Altro" is still usable when no generator has that name.
-    const legacy = await generate(
-      makeJob({ data: { columns: ['@Altro'], rows: [['valore']] }, fields: [textField({ content: '{@Altro}' })], to: 0 }),
+  it('reads {@Gift} as the generator and {"@Gift"} as the column, even with the same name', async () => {
+    const g = uniqueGen({ id: 'u4' });
+    const code = values(g, 1)[0];
+    const data = { columns: ['@Gift', 'Altro'], rows: [['colonna', 'x']] };
+    const both = await generate(
+      makeJob({ data, fields: [textField({ content: '{@Gift} {"@Gift"}' })], generators: [g], to: 0 }),
     );
-    expect(await texts(legacy.bytes, 1)).toEqual(['valore']);
+    // One zone, both sources: @ is always the generator, the quoted name is always the column.
+    expect(await texts(both.bytes, 1)).toEqual([`${code} colonna`]);
 
-    const missing = await generate(makeJob({ fields: [textField({ content: '{@Inesistente}' })], to: 0 })).catch((e: Error) => e);
-    expect((missing as Error).message).toContain('generatore "Inesistente" inesistente');
+    // {@Nome} never falls back to a column literally named "@Nome": only the quoted form reads it.
+    const missing = await generate(
+      makeJob({ data: { columns: ['@Nome'], rows: [['valore']] }, fields: [textField({ content: '{@Nome}' })], to: 0 }),
+    ).catch((e: Error) => e);
+    expect(missing).toBeInstanceOf(Error);
+    expect((missing as Error).message).toContain('generatore "Nome" inesistente');
+
+    const quoted = await generate(
+      makeJob({ data: { columns: ['@Nome'], rows: [['valore']] }, fields: [textField({ content: '{"@Nome"}' })], to: 0 }),
+    );
+    expect(await texts(quoted.bytes, 1)).toEqual(['valore']);
   });
 
   it('refuses more unique codes than the capacity allows, naming the zone', async () => {
@@ -284,12 +284,12 @@ async function editManifest(blob: Blob, edit: (m: Manifest) => void): Promise<Ui
 const uniqueOf = (m: Manifest) => m.generators!.find((g) => g.type === 'unique')!;
 
 describe('generators in the project archive', () => {
-  it('writes version 4 with every generator unchanged, key included', async () => {
+  it('writes version 5 with every generator unchanged, key included', async () => {
     const p = await archiveProject();
     const { blob } = await writeProjectArchive(p);
     const bytes = await bytesOf(blob);
     const manifest = JSON.parse(new TextDecoder().decode(await openZip(bytes).read('progetto.json'))) as Manifest;
-    expect(manifest.version).toBe(4);
+    expect(manifest.version).toBe(5);
 
     const opened = await readProjectFile(bytes);
     expect(opened.project.generators).toEqual(p.generators);
@@ -317,26 +317,23 @@ describe('generators in the project archive', () => {
     expect((await readProjectFile(bytes)).project.generators).toEqual([]);
   });
 
-  it('reads a version 3 manifest without generators', async () => {
-    const p = await archiveProject();
-    const blob = (await writeProjectArchive(p)).blob;
-    const bytes = await editManifest(blob, (m) => {
-      m.version = 3;
-      delete m.generators;
-    });
-    const opened = await readProjectFile(bytes);
-    expect(opened.project.generators).toEqual([]);
-    expect(opened.project.fields).toEqual(p.fields);
-  });
-
-  it('refuses a newer format and damaged generators', async () => {
+  it('refuses a newer or unsupported format and damaged generators', async () => {
     const p = await archiveProject();
     const blob = (await writeProjectArchive(p)).blob;
 
     const newer = await editManifest(blob, (m) => {
-      m.version = 5;
+      m.version = 6;
     });
-    await expect(readProjectFile(newer)).rejects.toThrow('formato più recente');
+    await expect(readProjectFile(newer)).rejects.toThrow('Progetto in un formato più recente (versione 6)');
+
+    // Versions 1–4 are experimental: reported as unsupported, not as "damaged".
+    const unsupported = await editManifest(blob, (m) => {
+      m.version = 4;
+    });
+    const old = await readProjectFile(unsupported).catch((e: Error) => e);
+    expect(old).toBeInstanceOf(Error);
+    expect((old as Error).message).toBe('Progetto in un formato non supportato (versione 4)');
+    expect((old as Error).message).not.toContain('danneggiato');
 
     const algorithm = await editManifest(blob, (m) => {
       uniqueOf(m).algorithm = 'sha1-v0';

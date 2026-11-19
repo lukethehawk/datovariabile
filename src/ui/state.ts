@@ -1,6 +1,7 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { activeComposition, jobPage, newId, type SourceInfo } from '../core/composition';
 import { toDataSet, type RawTable } from '../core/data';
+import { columnRef } from '../core/placeholders';
 import type { JobPage, JobSource } from '../core/generate';
 import type { BarcodeField, DataGenerator, DataSet, Field, FontAsset, Slot, SourceFile, TextField } from '../core/types';
 
@@ -153,7 +154,7 @@ export function createField(type: Field['type'], slot: Slot): Field {
     const field: TextField = {
       ...baseField(`Testo ${n}`, slot.id, (pw - w) / 2, (ph - h) / 2, w, h),
       type: 'text',
-      content: firstColumn ? `{${firstColumn}}` : '{#}',
+      content: firstColumn ? `{${columnRef(firstColumn)}}` : '{#}',
       font: 'Helvetica',
       size: 12,
       align: 'left',

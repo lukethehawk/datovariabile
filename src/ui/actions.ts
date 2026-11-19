@@ -5,7 +5,6 @@ import { inspectSource, jobPage, newId, slotsFor, sourceKind } from '../core/com
 import { readTable, toDataSet } from '../core/data';
 import { STANDARD_FONTS } from '../core/fonts';
 import { readProjectFile, writeProjectArchive } from '../core/archive';
-import { referencedColumns } from '../core/placeholders';
 import { ZIP_LIMITS } from '../core/zip';
 import type { SourceFile } from '../core/types';
 import { download, formatBytes } from './dom';
@@ -113,7 +112,7 @@ export function removeFont(name: string): void {
 /** Routes a dropped/selected file by extension. */
 export async function openFile(file: File): Promise<string> {
   const name = file.name;
-  const isProject = /\.(zip|json)$/i.test(name);
+  const isProject = /\.zip$/i.test(name);
   if (isProject && file.size > ZIP_LIMITS.archive) throw new Error(`Progetto troppo grande da aprire nel browser (${formatBytes(file.size)})`);
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (sourceKind(name)) return addSource(name, bytes);
@@ -159,9 +158,9 @@ export async function saveProject(): Promise<string> {
   return [`Progetto salvato: ${fileName} (${formatBytes(blob.size)})${privacy}${keys}`, ...warnings].join(' · ');
 }
 
-/** Opens a .dvp.zip (or a legacy .dvp.json). All or nothing: on error the current job stays as it was. */
+/** Opens a .dvp.zip. All or nothing: on error the current job stays as it was. */
 export async function openProject(fileName: string, bytes: Uint8Array): Promise<string> {
-  const { project, warnings, legacy } = await readProjectFile(bytes);
+  const { project, warnings } = await readProjectFile(bytes);
   // One file at a time (bounded memory); every page must resolve before the current job is replaced.
   const sources: Source[] = [];
   try {
@@ -194,11 +193,9 @@ export async function openProject(fileName: string, bytes: Uint8Array): Promise<
   state.record = 0;
   state.slotId = project.slots.find((s) => s.enabled)?.id ?? project.slots[0]?.id ?? null;
   state.selectedId = null;
-  state.projectName = fileName.replace(/\.dvp\.(zip|json)$/i, '').replace(/\.(zip|json)$/i, '');
+  state.projectName = fileName.replace(/\.dvp\.zip$/i, '').replace(/\.zip$/i, '');
   notify('composition', 'fonts', 'fields', 'selection', 'output', 'view', 'data', 'generators');
   // The new job is in place: failures while releasing the old files must not look like a failed opening.
   await Promise.allSettled(old.map((s) => s.close()));
-  const usesColumns = project.fields.some((f) => referencedColumns(f.content, (n) => project.generators.some((g) => g.name.toLowerCase() === n.toLowerCase())).length > 0);
-  if (legacy && usesColumns) warnings.unshift('Progetto in formato precedente: i dati non erano inclusi, carica il file dati e poi salva di nuovo');
   return [`Progetto aperto: ${fileName}`, ...warnings].join(' · ');
 }

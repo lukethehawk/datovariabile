@@ -58,7 +58,7 @@ $('#btn-save').addEventListener('click', () => {
   );
 });
 
-// Drop anywhere: PDF/JPG/PNG → velina, Excel/CSV/TXT → dati, TTF/OTF → font, .dvp.zip/.json → progetto.
+// Drop anywhere: PDF/JPG/PNG → velina, Excel/CSV/TXT → dati, TTF/OTF → font, .dvp.zip → progetto.
 let dragDepth = 0;
 window.addEventListener('dragenter', (e) => {
   if (!e.dataTransfer?.types.includes('Files')) return;

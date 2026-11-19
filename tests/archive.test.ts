@@ -1,8 +1,7 @@
 import * as XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
-import { readProjectFile, writeProjectArchive } from '../src/core/archive';
+import { readProjectFile, writeProjectArchive, type ProjectData, type SavedData } from '../src/core/archive';
 import { readTable, toDataSet } from '../src/core/data';
-import type { ProjectData, SavedData } from '../src/core/project';
 import { openZip, writeZip } from '../src/core/zip';
 import { makePdf, textField } from './helpers';
 import { flatJpeg } from './images';
@@ -56,7 +55,15 @@ async function editFields(blob: Blob, edit: (fields: Array<Record<string, unknow
   return rebuildArchive(blob, { 'progetto.json': new TextEncoder().encode(JSON.stringify(manifest)) });
 }
 
-describe('project archive (v3)', () => {
+/** Rebuilds the archive with the whole manifest edited, e.g. to rewrite its version. */
+async function editManifest(blob: Blob, edit: (manifest: Record<string, unknown>) => void): Promise<Uint8Array> {
+  const zip = openZip(await bytesOf(blob));
+  const manifest: Record<string, unknown> = JSON.parse(new TextDecoder().decode(await zip.read('progetto.json')));
+  edit(manifest);
+  return rebuildArchive(blob, { 'progetto.json': new TextEncoder().encode(JSON.stringify(manifest)) });
+}
+
+describe('project archive (v5)', () => {
   it('stores every file once, unchanged, and restores the whole project', async () => {
     const csv = new TextEncoder().encode('Codice;Nome;Nome;\n001234;"Rossi, Mario";L\'azienda;\n000007;"Dice ""ciao""\nsu due righe";Ünïcødé 漢字 😀;\n;;;x\n');
     const p = await project({ data: savedData('clienti.csv', csv) });
@@ -81,7 +88,6 @@ describe('project archive (v3)', () => {
     expect(await zip.read('veline/01-Fronte_e_retro.pdf')).toEqual(p.sources[0].bytes);
 
     const opened = await readProjectFile(bytes);
-    expect(opened.legacy).toBe(false);
     expect(opened.warnings).toEqual([]);
     expect(opened.project).toEqual(p);
     expect(opened.project.data!.table.cells[1]).toEqual(['001234', 'Rossi, Mario', "L'azienda", '']);
@@ -161,18 +167,54 @@ describe('project archive (v3)', () => {
     await expect(readProjectFile(noCode)).rejects.toThrow(/Progetto danneggiato o incompleto: zona "Testo": tipo di codice/);
   });
 
-  it('refuses a legacy v2 project whose zone has no counter', async () => {
-    const field: Record<string, unknown> = { ...textField({ slot: 's1' }) };
-    delete field.counter;
+  it('reports a version 4 manifest as unsupported, never as damaged', async () => {
+    const blob = (await writeProjectArchive(await project())).blob;
+    const bytes = await editManifest(blob, (manifest) => {
+      manifest.version = 4;
+    });
+    const error = await readProjectFile(bytes).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    expect(error?.message).toBe('Progetto in un formato non supportato (versione 4)');
+    expect(error?.message).not.toContain('danneggiato');
+  });
+
+  it('reports a version 6 manifest as a newer format', async () => {
+    const blob = (await writeProjectArchive(await project())).blob;
+    const bytes = await editManifest(blob, (manifest) => {
+      manifest.version = 6;
+    });
+    const error = await readProjectFile(bytes).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    expect(error?.message).toContain('formato più recente (versione 6)');
+    expect(error?.message).toContain('aggiorna DatoVariabile');
+  });
+
+  it('refuses a JSON text file that is not an archive', async () => {
     const v2 = {
       app: 'DatoVariabile',
       version: 2,
-      sources: [{ id: 'a', name: 'velina.pdf', kind: 'pdf', data: btoa('x') }],
-      slots: [{ id: 's1', sourceId: 'a', page: 0, enabled: true }],
-      fields: [field],
+      sources: [],
+      slots: [],
+      fields: [],
       fonts: [],
       manualCount: 1,
     };
-    await expect(readProjectFile(new TextEncoder().encode(JSON.stringify(v2)))).rejects.toThrow(/Progetto danneggiato: zona "Testo": contatore/);
+    await expect(readProjectFile(new TextEncoder().encode(JSON.stringify(v2)))).rejects.toThrow(
+      'Il file non è un progetto DatoVariabile (.dvp.zip)',
+    );
+  });
+
+  it('saves and reopens zones with invalid formulas, byte for byte', async () => {
+    const contents = ['{Codice|rigth:4', '{@X|'];
+    const fields = contents.map((content, i) => textField({ id: `formula${i}`, name: `Formula ${i + 1}`, slot: 's1', content }));
+    const p = await project({ fields });
+    const bytes = await bytesOf((await writeProjectArchive(p)).blob);
+    const opened = await readProjectFile(bytes);
+    expect(opened.project.fields.map((f) => f.content)).toEqual(contents);
+    expect(opened.project.fields).toEqual(fields);
   });
 });

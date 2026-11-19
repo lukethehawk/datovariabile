@@ -16,8 +16,8 @@
       <input id="in-data" class="file-input" type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.txt" title="Excel, CSV o TXT con i dati variabili" />
       <label for="in-data" class="btn" title="Excel, CSV o TXT con i dati variabili"><span aria-hidden="true">📊</span> Dati</label>
       <span class="sep"></span>
-      <input id="in-project" class="file-input" type="file" accept=".zip,.json" title="Apri un progetto salvato (.dvp.zip, oppure .dvp.json delle versioni precedenti)" />
-      <label for="in-project" class="btn" title="Apri un progetto salvato (.dvp.zip, oppure .dvp.json delle versioni precedenti)"><span aria-hidden="true">📂</span> Apri progetto</label>
+      <input id="in-project" class="file-input" type="file" accept=".zip" title="Apri un progetto salvato (.dvp.zip)" />
+      <label for="in-project" class="btn" title="Apri un progetto salvato (.dvp.zip)"><span aria-hidden="true">📂</span> Apri progetto</label>
       <button id="btn-save" class="btn" type="button" title="Salva in un unico file .dvp.zip file grafici, dati, zone, impostazioni e font (contiene anche i dati importati)">💾 Salva progetto</button>
       <span id="template-name" class="muted"></span>
       <span class="spacer"></span>
@@ -134,7 +134,7 @@
       </aside>
     </main>
     <div id="toast" class="toast"></div>
-    <div class="drop-hint">Rilascia i file: PDF/JPG/PNG = grafica · Excel/CSV/TXT = dati · TTF/OTF = font · .dvp.zip/.json = progetto</div>
+    <div class="drop-hint">Rilascia i file: PDF/JPG/PNG = grafica · Excel/CSV/TXT = dati · TTF/OTF = font · .dvp.zip = progetto</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

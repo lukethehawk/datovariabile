@@ -1,4 +1,5 @@
 import { isSpreadsheet } from '../core/data';
+import { columnRef } from '../core/placeholders';
 import { clearData, loadData } from './actions';
 import { $, errorMessage, h, toast } from './dom';
 import { notify, on, setSourceHeader, state } from './state';
@@ -48,7 +49,7 @@ function render(): void {
   const table = h(
     'table',
     {},
-    h('thead', {}, h('tr', {}, h('th', {}, '#'), ...data.columns.map((c) => h('th', { title: `{${c}}` }, c)))),
+    h('thead', {}, h('tr', {}, h('th', {}, '#'), ...data.columns.map((c) => h('th', { title: `{${columnRef(c)}}` }, c)))),
     h(
       'tbody',
       {},

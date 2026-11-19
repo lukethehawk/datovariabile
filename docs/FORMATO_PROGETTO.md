@@ -1,6 +1,6 @@
-# Formato del progetto DatoVariabile (`.dvp.zip`, versione 4)
+# Formato del progetto DatoVariabile (`.dvp.zip`, versione 5)
 
-Specifica sufficiente per scrivere un lettore o uno scrittore compatibile. Implementazione di riferimento: `src/core/archive.ts` (progetto), `src/core/zip.ts` (contenitore), `src/core/data.ts` (`writeProjectCsv`/`parseProjectCsv`), `src/core/project.ts` (lettura dei vecchi `.dvp.json` v1/v2). Il perché delle scelte è in fondo e in `DIARIO_SVILUPPO.md`.
+Specifica sufficiente per scrivere un lettore o uno scrittore compatibile. Implementazione di riferimento: `src/core/archive.ts` (progetto), `src/core/zip.ts` (contenitore), `src/core/data.ts` (`writeProjectCsv`/`parseProjectCsv`). La sintassi del contenuto delle zone (segnaposto e filtri) è in `docs/SPECIFICA_FILTRI.md`. Il perché delle scelte è in fondo e in `DIARIO_SVILUPPO.md`.
 
 ## 1. Contenitore
 
@@ -30,11 +30,11 @@ interface FileRef { path: string; size: number; crc32: number }   // size = byte
 
 interface ProjectManifest {
   app: 'DatoVariabile';
-  version: 4;                                       // 3 = stesso formato senza `generators` (ancora letto)
+  version: 5;                                       // l'unica letta e scritta
   savedAt: string;                                  // ISO 8601, informativo
   sources: Array<{ id: string; name: string; kind: 'pdf' | 'jpeg' | 'png'; file: FileRef }>;
   slots: Slot[];                                    // composizione, in ordine (vedi src/core/types.ts)
-  fields: Field[];                                  // zone; Field.slot = id di uno slot
+  fields: Field[];                                  // zone; Field.slot = id di uno slot; Field.content con la sintassi di SPECIFICA_FILTRI.md
   fonts: Array<{ name: string; file: FileRef }>;    // name = nome usato da TextField.font
   manualCount: number;                              // record da generare senza database
   range: { from: string; to: string };              // intervallo di record come digitato, "" = tutti
@@ -47,14 +47,14 @@ interface ProjectManifest {
     headerGuess: boolean;                           // suggerimento dell'importatore (riusato se si cambia foglio)
     columns: string[];                              // nomi effettivi delle colonne usati da {Colonna}
   };
-  generators: DataGenerator[];                      // generatori di dati {@Nome}, vedi §8 (assente nella versione 3)
+  generators: DataGenerator[];                      // generatori di dati {@Nome}, vedi §8
 }
 ```
 
 - `Slot = { id, sourceId, page, enabled, raster? }`, `RasterLayout = { size: 'image'|'A3'|'A4'|'A5'|'custom', width, height, orientation: 'auto'|'portrait'|'landscape', fit: 'contain'|'cover'|'stretch', dpi: number|null }`. Coordinate delle zone in punti PDF, origine in alto a sinistra della pagina visualizzata (AGENTS.md, invariante 2).
 - Ogni `FileRef.path` deve essere relativo e sicuro (niente `..`, `/` iniziale, `\`, `:`, caratteri di controllo), presente nell'archivio e usato da un solo riferimento. `size` e `crc32` del manifest devono coincidere con quelli della voce ZIP (eccezione: `dati/dati-usati.csv`, vedi §4). Le sorgenti non usate da nessuno slot vengono salvate comunque (fanno parte del lavoro).
 - Le zone sono validate per intero prima di applicare il progetto (tipo, posizione, rotazione, colore, contatore, font esistente fra standard e `fonts`, simbologia nota); ogni slot deve puntare a una pagina esistente della sua sorgente.
-- `version` 3 si legge come 4 con `generators: []`; `version` maggiore di 4 → il lettore deve rifiutare ("formato più recente"). Lo scrittore produce sempre la 4: un'app che conosce solo la 3 rifiuta i progetti nuovi invece di perdere i generatori risalvandoli.
+- `version` diversa da 5 → il lettore rifiuta: maggiore di 5 "formato più recente", minore "formato non supportato" (le versioni 1–4 erano sperimentali, nessuna migrazione). Il campo `content` delle zone è una stringa libera, non validata in apertura: un progetto con formule incomplete si salva e si riapre, la generazione segnala gli errori.
 
 ## 4. Tabella dati `dati/dati-usati.csv`
 
@@ -84,14 +84,7 @@ Apertura tutto-o-niente: si prepara il nuovo progetto completo (file letti, PDF 
 
 ## 6. Versioni precedenti
 
-| Versione | File | Contenuto | In lettura |
-| --- | --- | --- | --- |
-| 1 | `.dvp.json` | una velina PDF in base64, `pagesSpec`, zone con `page` | migrata: velina → sorgente, `pagesSpec` → slot (zona copiata per ogni occorrenza della sua pagina, pagine escluse con zone → slot disabilitati) |
-| 2 | `.dvp.json` | sorgenti in base64, slot, zone con `slot`, font, `manualCount` | letta così com'è |
-| 3 | `.dvp.zip` | come la 4 ma senza `generators` (2026-11-16) | letta con `generators: []` |
-| 4 | `.dvp.zip` | questo documento | formato scritto da "Salva progetto" |
-
-v1/v2 non contenevano i dati: dopo l'apertura database e intervallo sono vuoti e, se le zone usano colonne, l'utente riceve l'invito a caricare il file dati e salvare di nuovo (diventa v4). Un `progetto.json` v3/v4 aperto da solo (estratto dallo ZIP) viene rifiutato: i suoi file sono riferimenti.
+La versione 5 è il primo formato stabile. Le versioni 1–4 (`.dvp.json` v1/v2, `.dvp.zip` v3/v4, novembre 2026) erano sperimentali, non sono mai state usate in produzione e non vengono lette: "Apri progetto" rifiuta un `.dvp.json` ("non è un progetto DatoVariabile (.dvp.zip)") e un archivio v1–v4 ("formato non supportato"). Un `progetto.json` aperto da solo (estratto dallo ZIP) viene rifiutato: i suoi file sono riferimenti.
 
 ## 7. Decisioni (Council Opus 5.5 High + GPT-6.1 Sol High, 2026-11-16)
 
@@ -118,7 +111,7 @@ type DataGenerator =
              format: 'dd/MM/yyyy' | 'dd-MM-yyyy' | 'dd/MM/yy' | 'dd/MM/yyyy HH:mm' | 'HH:mm' | 'yyyy-MM-dd' | 'yyyy-MM-dd HH:mm' };
 ```
 
-**Sintassi nelle zone.** `{#}` = contatore della zona (invariato); `{@Nome}` = generatore (nome confrontato senza distinguere maiuscole); `{X}` = colonna. Se nessun generatore si chiama `Nome`, `{@Nome}` cerca una colonna letteralmente chiamata `@Nome` (compatibilità con i progetti precedenti); se esistono entrambi la generazione si ferma con errore. Rinominare un generatore riscrive `{@vecchio}` → `{@nuovo}` in tutte le zone. Nomi: non vuoti, senza spazi ai bordi, senza `{}`, max 40 caratteri, unici.
+**Sintassi nelle zone** (dettagli in `docs/SPECIFICA_FILTRI.md`). `{#}` = contatore della zona; `{@Nome}` = **solo** generatore (nome confrontato senza distinguere maiuscole); `{Colonna}` o `{"Colonna"}` = colonna (nome esatto; tra virgolette JSON se non è un nome nudo, es. `{"@Nome"}`, `{"#"}`); filtri dopo `|`. Rinominare un generatore cambia solo il nome nei segnaposto, il resto resta identico. Nomi dei generatori: nomi nudi (non vuoti, senza spazi ai bordi, senza `{ } | "` né caratteri di controllo, non iniziano con `@` o `#`), max 40 caratteri, unici senza distinguere maiuscole.
 
 **Numerazione.** Con `lettersOf(o)` = numerale biiettivo in base k = |alphabet| (1 → A, k → Z, k+1 → AA, come le colonne di Excel) e `ordinalOf` la sua inversa:
 - `number`: `pad(start + i·step, digits)`; numero negativo o non intero sicuro → errore.

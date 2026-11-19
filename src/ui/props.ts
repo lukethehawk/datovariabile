@@ -1,5 +1,6 @@
 import { SYMBOLOGIES } from '../core/barcode';
 import { STANDARD_FONTS } from '../core/fonts';
+import { columnRef } from '../core/placeholders';
 import type { BarcodeField, ColorSpec, Field, Rotation, TextField } from '../core/types';
 import { $, h } from './dom';
 import { cloneField, createField, currentSlot, MM, notify, on, selectedField, state } from './state';
@@ -183,7 +184,7 @@ function columnPicker(f: Field, target: HTMLTextAreaElement | HTMLInputElement):
   return h(
     'div',
     { class: 'chips' },
-    ...cols.map((c) => h('button', { type: 'button', class: 'chip', title: `Inserisci {${c}}`, onclick: () => insert(`{${c}}`) }, c)),
+    ...cols.map((c) => h('button', { type: 'button', class: 'chip', title: `Inserisci {${columnRef(c)}}`, onclick: () => insert(`{${columnRef(c)}}`) }, c)),
     h('button', { type: 'button', class: 'chip counter', title: 'Inserisci il contatore {#}', onclick: () => insert('{#}') }, '# contatore'),
     ...state.generators.map((g) => h('button', { type: 'button', class: 'chip generator', title: `Inserisci il generatore {@${g.name}}`, onclick: () => insert(`{@${g.name}}`) }, `@${g.name}`)),
   );

@@ -12,7 +12,8 @@
  */
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { generatorToken, PLACEHOLDER } from './placeholders';
+import { reducesValue } from './filters';
+import { isBareName, parseContent, type PlaceholderNode } from './placeholders';
 import type { DataGenerator, DateFormat, DateTimeGenerator, Field, NumberingGenerator, UniqueGenerator } from './types';
 
 export const DEFAULT_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -327,12 +328,16 @@ export function formatDateTime(g: DateTimeGenerator, now: number): string {
 const isInt = (v: unknown, min = -1e12, max = 1e12) => typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
 const distinct = (s: string) => new Set(s).size === [...s].length;
 
-/** Why a generator name cannot be used in {@Nome}, or null. Uniqueness is checked by the caller. */
+/**
+ * Why a generator name cannot be used in {@Nome}, or null. A generator name is a bare name
+ * (isBareName: never needs quotes). Uniqueness is checked by the caller.
+ */
 export function nameProblem(name: string): string | null {
   if (!name.trim()) return 'nome vuoto';
   if (name !== name.trim()) return 'il nome non può iniziare o finire con uno spazio';
-  if (/[{}]/.test(name)) return 'il nome non può contenere parentesi graffe';
   if (name.length > 40) return 'nome troppo lungo (massimo 40 caratteri)';
+  if (/^[@#]/.test(name)) return 'il nome non può iniziare con @ o #';
+  if (!isBareName(name)) return 'il nome non può contenere { } | " né caratteri di controllo';
   return null;
 }
 
@@ -414,15 +419,31 @@ export function generatorExamples(g: DataGenerator, n: number, now: number): str
   }
 }
 
-/** Generator names written as {@Nome} in a content, read exactly as compileContent() reads them. */
+/** Generator names used by a content, read by the same parser as compileContent (also with filter errors). */
 export function referencedGenerators(content: string): string[] {
-  return [...content.matchAll(PLACEHOLDER)].flatMap((m) => {
-    const name = generatorToken(m[1]);
-    return name === null ? [] : [name];
-  });
+  return parseContent(content).nodes.flatMap((n) => (n.type === 'placeholder' && n.source?.kind === 'generator' ? [n.source.name] : []));
 }
 
-/** Content with {@old} replaced by {@new} (case-insensitive match), used when a generator is renamed. */
+/**
+ * Content with the generator `oldName` (case-insensitive) renamed to `newName`: only the name inside
+ * each placeholder changes, everything else (spaces, filters, text after an error) stays byte for byte.
+ */
 export function renameInContent(content: string, oldName: string, newName: string): string {
-  return content.replace(PLACEHOLDER, (all, token: string) => (generatorToken(token)?.toLowerCase() === oldName.toLowerCase() ? `{@${newName}}` : all));
+  const targets = parseContent(content).nodes.filter(
+    (n): n is PlaceholderNode => n.type === 'placeholder' && n.source?.kind === 'generator' && n.source.name.toLowerCase() === oldName.toLowerCase(),
+  );
+  let out = content;
+  for (const n of targets.reverse()) out = out.slice(0, n.nameStart) + newName + out.slice(n.nameEnd);
+  return out;
+}
+
+/**
+ * True when a placeholder of the content reads a unique-code generator through a filter that can remove
+ * or change characters ({@Codice|right:4}): the result may repeat across records (non-blocking warning).
+ */
+export function reducesUniqueCode(content: string, generators: DataGenerator[]): boolean {
+  const unique = new Set(generators.filter((g) => g.type === 'unique').map((g) => g.name.toLowerCase()));
+  return parseContent(content).nodes.some(
+    (n) => n.type === 'placeholder' && n.source?.kind === 'generator' && unique.has(n.source.name.toLowerCase()) && reducesValue(n.filters),
+  );
 }

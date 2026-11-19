@@ -2,22 +2,34 @@ import GenerateWorker from '../worker?worker&inline';
 import type { WorkerMessage, WorkerRequest } from '../worker';
 import { revealSection, setSectionAlert, setSectionMeta } from './sections';
 import { activeComposition } from '../core/composition';
-import { generationIssue } from '../core/generators';
+import { generationIssue, reducesUniqueCode } from '../core/generators';
+import { contentProblem, isStaticallyEmpty } from '../core/placeholders';
 import type { Field, Slot } from '../core/types';
 import { $, download, errorMessage, formatBytes, h, toast } from './dom';
 import { enabledSlots, jobSources, notify, on, recordCount, recordRange, slotPage, state } from './state';
 
 /**
  * What "Crea PDF" would generate now, or the reason it cannot (thrown, Italian). The summary and
- * runGeneration both call this: same pages, same fields, same checks.
+ * runGeneration both call this: same pages, same fields, same checks. Contents are checked statically
+ * (syntax, filters, columns, generator names) without drawing unique codes; `warnings` never block.
  */
-function plannedJob(): { from: number; to: number; slots: Slot[]; fields: Field[] } {
+function plannedJob(): { from: number; to: number; slots: Slot[]; fields: Field[]; warnings: string[] } {
   const { from, to } = recordRange();
   const { slots, fields } = activeComposition(state.slots, state.fields);
   if (!slots.length) throw new Error('Tutte le pagine sono escluse: attivane almeno una');
+  const columns = state.data?.columns ?? null;
+  const generatorNames = new Set(state.generators.map((g) => g.name.toLowerCase()));
+  for (const f of fields) {
+    const problem = contentProblem(f.content, columns, (n) => generatorNames.has(n.toLowerCase()));
+    if (problem) throw new Error(`Zona "${f.name}": ${problem}`);
+    if (f.type === 'barcode' && isStaticallyEmpty(f.content)) throw new Error(`Zona "${f.name}": il contenuto del codice è vuoto`);
+  }
   const issue = generationIssue(state.generators, fields, to + 1);
   if (issue) throw new Error(issue);
-  return { from, to, slots, fields };
+  const warnings = fields
+    .filter((f) => reducesUniqueCode(f.content, state.generators))
+    .map((f) => `Zona "${f.name}": la trasformazione riduce un codice univoco, il risultato potrebbe ripetersi su più record`);
+  return { from, to, slots, fields, warnings };
 }
 
 const panel = $('#output-panel');
@@ -85,12 +97,15 @@ function renderSummary(): void {
     el.classList.remove('error');
   } else {
     try {
-      const { from, to, slots } = plannedJob();
+      const { from, to, slots, warnings } = plannedJob();
       const perRecord = slots.length;
       const records = to - from + 1;
       pages = `${records * perRecord} ${records * perRecord === 1 ? 'pagina' : 'pagine'}`;
       const partial = records < recordCount() ? ` (record ${from + 1}–${to + 1} di ${recordCount()})` : '';
-      el.textContent = `${records} record × ${perRecord} ${perRecord === 1 ? 'pagina' : 'pagine'} = ${pages} PDF${partial}`;
+      el.replaceChildren(
+        `${records} record × ${perRecord} ${perRecord === 1 ? 'pagina' : 'pagine'} = ${pages} PDF${partial}`,
+        ...warnings.map((w) => h('span', { class: 'summary-warn' }, `⚠ ${w}`)),
+      );
       el.classList.remove('error');
     } catch (e) {
       problem = errorMessage(e);

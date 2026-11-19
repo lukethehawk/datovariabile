@@ -1,11 +1,10 @@
 import { PDFArray, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { describe, expect, it } from 'vitest';
-import { readProjectFile, writeProjectArchive } from '../src/core/archive';
+import { readProjectFile, writeProjectArchive, type ProjectData } from '../src/core/archive';
 import { blankPageName, blankPagePdf, blankSizeProblem, parseMm } from '../src/core/blank';
 import { generate } from '../src/core/generate';
 import { UNIQUE_ALPHABETS } from '../src/core/generators';
-import type { ProjectData } from '../src/core/project';
 import type { NumberingGenerator, UniqueGenerator } from '../src/core/types';
 import { openZip } from '../src/core/zip';
 import { barcodeField, makePdf, pdfJob, textField } from './helpers';
@@ -373,7 +372,7 @@ describe('blank pages in mixed compositions', () => {
 // ---------------------------------------------------------------- project archive
 
 describe('blank page in the project archive', () => {
-  it('saves and reopens a project whose only source is a blank page, as format 4', async () => {
+  it('saves and reopens a project whose only source is a blank page, as format 5', async () => {
     const bytes = await blankPagePdf(50, 30, 'Etichetta prodotto');
     const generators = [numberingGen({ digits: 4 })];
     const fields = [
@@ -406,10 +405,9 @@ describe('blank page in the project archive', () => {
 
     const zip = openZip(archive);
     const manifest = JSON.parse(new TextDecoder().decode(await zip.read('progetto.json'))) as { version: number };
-    expect(manifest.version).toBe(4);
+    expect(manifest.version).toBe(5);
 
     const opened = await readProjectFile(archive);
-    expect(opened.legacy).toBe(false);
     expect(opened.warnings).toEqual([]);
     expect(opened.project.sources).toHaveLength(1);
     expect(opened.project.sources[0].name).toBe('Etichetta prodotto.pdf');
